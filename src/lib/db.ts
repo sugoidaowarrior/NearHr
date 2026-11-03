@@ -151,6 +151,16 @@ export function initDb(): void {
   // One-off migrations (safe to run every boot: no-op when already migrated).
   // Amounts exceed 2^63 (1 NEAR = 10^24 yocto) — SQLite INTEGER overflows to
   // REAL and silently corrupts the value, so they must live in TEXT columns.
+  const ver = (db.prepare("PRAGMA user_version").get() as { user_version: number })
+    .user_version;
+  if (ver < 2) {
+    // Every user is an HR operator of their own workspace: no role selection.
+    db.exec(`UPDATE users SET role = 'employer' WHERE role IS NOT 'employer'`);
+    // Clear imported Google photos so the default monogram pfp shows until the
+    // user chooses their own image.
+    db.exec(`UPDATE users SET avatar = NULL`);
+    db.prepare("PRAGMA user_version = 2").run();
+  }
   const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
     name: string;
     type: string;

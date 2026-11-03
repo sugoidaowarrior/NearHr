@@ -270,6 +270,127 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/* ── profile modal: pfp upload ─────────────────────────────────────── */
+function ProfileModal({
+  user,
+  initials,
+  onClose,
+  onSaveAvatar,
+  onSignedOut,
+}: {
+  user: User;
+  initials: string;
+  onClose: () => void;
+  onSaveAvatar: (dataUrl: string | null) => Promise<boolean>;
+  onSignedOut: () => void;
+}) {
+  const [preview, setPreview] = useState<string | null>(user.avatar);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function pickImage(file: File) {
+    setErr("");
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+      setErr("Please choose a png, jpeg, webp or gif image.");
+      return;
+    }
+    // Downscale to a 256x256 square so the data URL stays small.
+    try {
+      const url = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => rej(new Error("could not read image"));
+        im.src = url;
+      });
+      const size = 256;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas not supported");
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      setPreview(canvas.toDataURL("image/jpeg", 0.85));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "could not read image");
+    }
+  }
+
+  async function save() {
+    setBusy(true);
+    setErr("");
+    const ok = await onSaveAvatar(preview);
+    setBusy(false);
+    if (ok) onClose();
+    else setErr("Could not save the image. Try again.");
+  }
+
+  async function remove() {
+    setPreview(null);
+    setBusy(true);
+    setErr("");
+    const ok = await onSaveAvatar(null);
+    setBusy(false);
+    if (ok) onClose();
+    else setErr("Could not remove the image.");
+  }
+
+  return (
+    <Modal title="Your profile" onClose={onClose}>
+      <div className="flex flex-col items-center">
+        <div className="relative">
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview} alt="Profile" className="h-24 w-24 rounded-full object-cover" />
+          ) : (
+            <div className="grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-2xl font-extrabold text-white">
+              {initials}
+            </div>
+          )}
+          <label className="absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] text-[var(--color-ink)] transition hover:border-[var(--color-accent)]">
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickImage(f);
+                e.target.value = "";
+              }}
+            />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </label>
+        </div>
+        <div className="mt-4 text-sm font-semibold">{user.name}</div>
+        <div className="mono text-xs text-[var(--color-faint)]">{user.email}</div>
+
+        {err && <div className="mt-4 w-full border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] p-3 text-xs text-[#f87171]">{err}</div>}
+
+        <div className="mt-6 flex w-full flex-col gap-2">
+          <button className="btn btn-primary w-full" disabled={busy || preview === user.avatar} onClick={save}>
+            {busy ? "Saving" : "Save profile image"}
+          </button>
+          {preview && (
+            <button className="btn btn-ghost w-full" disabled={busy} onClick={remove}>
+              Remove image, use default
+            </button>
+          )}
+          <button className="btn btn-danger w-full" onClick={onSignedOut}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* ── main ───────────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const router = useRouter();
@@ -294,6 +415,7 @@ export default function Dashboard() {
   const [empModal, setEmpModal] = useState<null | { editing: Employee | null }>(null);
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const [toast, setToast] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
@@ -304,17 +426,14 @@ export default function Dashboard() {
     toastTimer.current = setTimeout(() => setToast(null), 4200);
   }, []);
 
-  const isEmployer = user?.role === "employer";
+  const isEmployer = !!user;
 
   const loadFast = useCallback(async () => {
     setLoadErr("");
     try {
       const me = await api("/api/me");
       setUser(me.user);
-      if (me.user?.role !== "employer") {
-        setBooting(false);
-        return;
-      }
+      // Every user is an HR operator of their own workspace.
       const [pf, emps, pay, sch, runRes] = await Promise.all([
         api("/api/portfolio").catch(() => null),
         api("/api/employees").catch(() => ({ employees: [] })),
@@ -396,6 +515,22 @@ export default function Dashboard() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     router.push("/login");
   }, [router]);
+
+  const saveAvatar = useCallback(
+    async (dataUrl: string | null) => {
+      try {
+        const res = await api("/api/me/avatar", {
+          method: "POST",
+          body: JSON.stringify({ avatar: dataUrl }),
+        });
+        setUser((prev) => (prev ? { ...prev, avatar: res.avatar ?? null } : prev));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
 
   const addEmployee = useCallback(
     async (input: Partial<Employee>) => {
@@ -646,7 +781,11 @@ export default function Dashboard() {
                   <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
                 </svg>
               </button>
-              <div className="flex items-center gap-2 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] py-1 pl-1 pr-3">
+              <button
+                className="flex items-center gap-2 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] py-1 pl-1 pr-3 transition hover:border-[var(--color-accent)]"
+                onClick={() => setProfileOpen(true)}
+                title="Your profile"
+              >
                 {user.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
@@ -656,7 +795,7 @@ export default function Dashboard() {
                   </div>
                 )}
                 <span className="hidden max-w-[140px] truncate text-sm font-medium sm:block">{user.name || user.email}</span>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -673,6 +812,7 @@ export default function Dashboard() {
                 <p className="mt-3 text-sm text-[#9aa0b4]">Check your daily payroll report</p>
                 <div className="mt-5 flex flex-wrap items-center gap-2.5">
                   <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>Run payroll</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setEmpModal({ editing: null })}>Add employee</button>
                   <button className="btn btn-ghost btn-sm !border-white/25 !text-white hover:!border-white/60 hover:!text-white hover:!bg-white/10" onClick={() => setSwapOpen(true)}>
                     Swap NEAR and USDC
                   </button>
@@ -823,6 +963,12 @@ export default function Dashboard() {
                   <span className="mono text-[var(--color-faint)]">B.</span> Operations
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
+                  <button className="btn btn-primary btn-sm col-span-2" onClick={() => setEmpModal({ editing: null })}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Add employee
+                  </button>
                   <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>New payroll</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setSendOpen(true)}>Send</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setReceiveOpen(true)}>Receive</button>
@@ -1123,6 +1269,18 @@ export default function Dashboard() {
       </div>
 
       {/* modals */}
+      {profileOpen && user && (
+        <ProfileModal
+          user={user}
+          initials={initials}
+          onClose={() => setProfileOpen(false)}
+          onSaveAvatar={saveAvatar}
+          onSignedOut={() => {
+            setProfileOpen(false);
+            signOut();
+          }}
+        />
+      )}
       {sendOpen && <SendModal employees={employees} onClose={() => setSendOpen(false)} onSend={sendOneOff} />}
       {receiveOpen && account && <ReceiveModal address={account} onClose={() => setReceiveOpen(false)} />}
       {swapOpen && (

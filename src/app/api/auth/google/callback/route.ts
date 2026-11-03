@@ -34,16 +34,13 @@ export async function GET(req: NextRequest) {
     console.log(`[auth] google exchange failed: ${msg}`);
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(msg)}`, req.url));
   }
-  // Upsert user
-  const isEmployer = process.env.EMPLOYER_EMAILS
-    ?.split(",")
-    .map((s) => s.trim().toLowerCase())
-    .includes(profile.email.toLowerCase());
+  // Upsert user. Everyone is an HR operator (no role selection) and the
+  // profile starts with the default monogram pfp: the user picks their own
+  // image in the app, so we never store Google's photo (it may be a meme).
   db.prepare(
-    `INSERT INTO users (id, email, name, avatar, role) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET email=excluded.email, name=excluded.name, avatar=excluded.avatar,
-       role = CASE WHEN users.role='employer' THEN 'employer' ELSE excluded.role END`
-  ).run(profile.sub, profile.email, profile.name, profile.avatar, isEmployer ? "employer" : "employee");
+    `INSERT INTO users (id, email, name, avatar, role) VALUES (?, ?, ?, NULL, 'employer')
+     ON CONFLICT(id) DO UPDATE SET email=excluded.email, name=excluded.name, role='employer'`
+  ).run(profile.sub, profile.email, profile.name);
 
   const { token, expiresAt } = issueSession(profile.sub);
   // Secure only on real HTTPS — a Secure cookie set over http://localhost

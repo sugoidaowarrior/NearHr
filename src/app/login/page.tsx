@@ -38,7 +38,7 @@ export default async function Login({
                 N
               </span>
               <div>
-                <div className="text-[15px] font-bold tracking-tight">Employer access</div>
+                <div className="text-[15px] font-bold tracking-tight">Welcome to NearHr</div>
                 <div className="text-[11.5px] text-[var(--color-faint)]">Sign in to your payroll workspace</div>
               </div>
             </div>
