@@ -245,21 +245,44 @@ export default function Home() {
 
       {/* people first */}
       <section className="landing-section">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="landing-kicker">Employee benefits</div>
-          <h2 className="landing-h2">Put your people front and center.</h2>
-          <p className="landing-lead mx-auto">
-            It takes more than a salary. NearHr keeps your team directory, pay day and last paid
-            amount in one place, and reminds you when someone is still waiting on their pay.
-          </p>
+        <div className="people-row">
+          <img
+            src="/img/hr-people.jpg"
+            className="people-photo"
+            alt="HR operator reviewing payroll on a tablet"
+          />
+          <div className="people-copy">
+            <div className="landing-kicker">Employee benefits</div>
+            <h2 className="landing-h2">Put your people front and center.</h2>
+            <p className="landing-lead">
+              It takes more than a salary. NearHr keeps your team directory, pay day and last paid
+              amount in one place, and reminds you when someone is still waiting on their pay.
+            </p>
+            <ul className="people-list">
+              <li>
+                <span className="check-dot" />
+                <span>
+                  <b>Team directory</b>
+                  <em>Every person with wallet, salary, pay day and privacy level at a glance.</em>
+                </span>
+              </li>
+              <li>
+                <span className="check-dot" />
+                <span>
+                  <b>Pay day reminders</b>
+                  <em>Set the date once and NearHr flags anyone still unpaid after the run.</em>
+                </span>
+              </li>
+              <li>
+                <span className="check-dot" />
+                <span>
+                  <b>Audit viewing key</b>
+                  <em>Share a read only key so an auditor verifies payouts without exposing funds.</em>
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
-        <CheckList
-          rows={[
-            ["Team directory", "Every person with wallet, salary, pay day and privacy level at a glance."],
-            ["Pay day reminders", "Set the date once and NearHr flags anyone still unpaid after the run."],
-            ["Audit viewing key", "Share a read only key so an auditor verifies payouts without exposing funds."],
-          ]}
-        />
         <img src="/img/hr-directory.svg" className="mock" alt="Team directory: eight people as tiles with privacy rings, filter pills and an audit viewing key panel" />
       </section>
 

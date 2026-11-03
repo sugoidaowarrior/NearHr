@@ -24,6 +24,7 @@ export interface EmployeeInput {
   email?: string;
   department?: string;
   jobTitle?: string;
+  avatar?: string | null;
   wallet: string;
   asset?: "NEAR" | "USDC";
   salary?: string;
@@ -39,6 +40,7 @@ export interface Employee {
   email: string | null;
   department: string | null;
   jobTitle: string | null;
+  avatar: string | null;
   wallet: string;
   asset: string;
   salary: string;
@@ -60,6 +62,7 @@ type Row = {
   email: string | null;
   department: string | null;
   job_title: string | null;
+  avatar: string | null;
   wallet: string;
   asset: string;
   salary: string;
@@ -99,6 +102,15 @@ function validate(input: Partial<EmployeeInput>, { partial = false }: { partial?
     out.push("status must be active or offboarded");
   if (input.privacy !== undefined && !(PRIVACY_LEVELS as string[]).includes(input.privacy))
     out.push("privacy must be transparent, shielded or compliant");
+  if (input.avatar !== undefined && input.avatar !== null && input.avatar !== "") {
+    if (
+      typeof input.avatar !== "string" ||
+      !/^data:image\/(png|jpeg|webp|gif);base64,/.test(input.avatar) ||
+      input.avatar.length > 600_000
+    ) {
+      out.push("avatar must be a small png, jpeg, webp or gif image");
+    }
+  }
   if (input.payDay !== undefined && input.payDay !== null) {
     const d = Number(input.payDay);
     if (!Number.isInteger(d) || d < 1 || d > 28) out.push("pay day must be an integer from 1 to 28");
@@ -136,6 +148,7 @@ export function listEmployees(employerId: string): Employee[] {
     email: r.email,
     department: r.department,
     jobTitle: r.job_title,
+    avatar: r.avatar ?? null,
     wallet: r.wallet,
     asset: r.asset,
     salary: r.salary,
@@ -161,8 +174,8 @@ export function addEmployee(employerId: string, input: EmployeeInput): Employee 
   const id = randomUUID();
   db.prepare(
     `INSERT INTO employees
-      (id, employer_id, name, email, department, job_title, wallet, asset, salary, frequency, pay_day, status, privacy)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (id, employer_id, name, email, department, job_title, avatar, wallet, asset, salary, frequency, pay_day, status, privacy)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     employerId,
@@ -170,6 +183,7 @@ export function addEmployee(employerId: string, input: EmployeeInput): Employee 
     input.email?.trim() || null,
     input.department?.trim() || null,
     input.jobTitle?.trim() || null,
+    input.avatar || null,
     String(input.wallet).trim().toLowerCase(),
     input.asset ?? "NEAR",
     String(input.salary ?? "0"),
@@ -202,6 +216,7 @@ export function updateEmployee(employerId: string, id: string, input: Partial<Em
   if (input.email !== undefined) put("email", input.email?.trim() || null);
   if (input.department !== undefined) put("department", input.department?.trim() || null);
   if (input.jobTitle !== undefined) put("job_title", input.jobTitle?.trim() || null);
+  if (input.avatar !== undefined) put("avatar", input.avatar || null);
   if (input.wallet !== undefined) put("wallet", String(input.wallet).trim().toLowerCase());
   if (input.asset !== undefined) put("asset", input.asset);
   if (input.salary !== undefined) put("salary", String(input.salary ?? "0"));

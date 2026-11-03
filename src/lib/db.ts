@@ -179,6 +179,14 @@ export function initDb(): void {
     }
     db.prepare("PRAGMA user_version = 4").run();
   }
+  if (ver < 5) {
+    // Optional profile photo per employee (data URL), set when adding a person.
+    const empCols = db.prepare("PRAGMA table_info(employees)").all() as { name: string }[];
+    if (!empCols.some((c) => c.name === "avatar")) {
+      db.exec("ALTER TABLE employees ADD COLUMN avatar TEXT");
+    }
+    db.prepare("PRAGMA user_version = 5").run();
+  }
   const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
     name: string;
     type: string;

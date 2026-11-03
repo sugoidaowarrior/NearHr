@@ -27,6 +27,7 @@ type Employee = {
   email: string | null;
   department: string | null;
   jobTitle: string | null;
+  avatar: string | null;
   wallet: string;
   asset: string;
   salary: string;
@@ -1248,7 +1249,11 @@ export default function Dashboard() {
                               className="member-ring flex-none"
                               style={{ boxShadow: `0 0 0 2px ${meta.color}`, color: meta.color }}
                             >
-                              <span className="text-[15px] font-extrabold">{nameInitials(e.name)}</span>
+                              {e.avatar && e.avatar.startsWith("data:image/") ? (
+                                <img src={e.avatar} alt={e.name} className="member-photo" />
+                              ) : (
+                                <span className="text-[15px] font-extrabold">{nameInitials(e.name)}</span>
+                              )}
                             </div>
                             <span className="h-2 w-2 flex-none rounded-full" style={{ background: meta.color }} />
                           </div>
@@ -1779,6 +1784,7 @@ function EmployeeModal({
     email: employee?.email ?? "",
     department: employee?.department ?? "",
     jobTitle: employee?.jobTitle ?? "",
+    avatar: employee?.avatar ?? "",
     wallet: employee?.wallet ?? "",
     asset: employee?.asset ?? "NEAR",
     salary: employee?.salary ?? "",
@@ -1790,6 +1796,26 @@ function EmployeeModal({
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
 
+  const pickAvatar = (file: File | undefined) => {
+    if (!file) return;
+    if (!/image\/(png|jpeg|webp|gif)/.test(file.type) || file.size > 300 * 1024) return;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = 96;
+      c.height = 96;
+      const ctx = c.getContext("2d");
+      if (ctx) {
+        const s = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 96, 96);
+        set("avatar", c.toDataURL("image/jpeg", 0.85));
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+
   async function submit() {
     setBusy(true);
     const ok = await onSave({
@@ -1797,6 +1823,7 @@ function EmployeeModal({
       email: f.email || undefined,
       department: f.department || undefined,
       jobTitle: f.jobTitle || undefined,
+      avatar: f.avatar || undefined,
       wallet: f.wallet,
       asset: f.asset as "NEAR" | "USDC",
       salary: f.salary,
@@ -1812,6 +1839,38 @@ function EmployeeModal({
   return (
     <Modal title={employee ? "Edit employee" : "Add employee"} onClose={onClose} wide>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Field label="Profile photo">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="member-ring flex-none">
+                {f.avatar ? (
+                  <img src={f.avatar} alt="Profile preview" className="member-photo" />
+                ) : (
+                  <span className="text-[15px] font-extrabold">
+                    {(f.name || "A").trim().charAt(0).toUpperCase() || "A"}
+                  </span>
+                )}
+              </div>
+              <label className="btn btn-ghost btn-sm cursor-pointer">
+                Upload image
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="sr-only"
+                  onChange={(e) => pickAvatar(e.target.files?.[0])}
+                />
+              </label>
+              {f.avatar && (
+                <button className="btn btn-ghost btn-sm" onClick={() => set("avatar", "")}>
+                  Remove
+                </button>
+              )}
+              <span className="text-[11px] text-[var(--color-faint)]">
+                png, jpeg, webp or gif · 300KB max
+              </span>
+            </div>
+          </Field>
+        </div>
         <Field label="Full name">
           <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Ada Okoye" />
         </Field>
