@@ -87,6 +87,14 @@ export function initDb(): void {
       expires_at      TEXT NOT NULL
     );
 
+    -- Short-lived OAuth PKCE state -> verifier (10-minute TTL, single use)
+    CREATE TABLE IF NOT EXISTS oauth_states (
+      state           TEXT PRIMARY KEY,
+      verifier        TEXT NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at      TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_items_run ON payroll_items(run_id);
     CREATE INDEX IF NOT EXISTS idx_runs_employer ON payroll_runs(employer_id);
   `);

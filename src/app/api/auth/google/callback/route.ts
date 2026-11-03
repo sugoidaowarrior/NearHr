@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=missing_params", req.url));
   }
   const db = getDb();
-  const row = db.prepare("SELECT user_id FROM sessions WHERE token = ?").get(`oauth:${state}`) as
-    | { user_id: string }
+  const row = db.prepare("SELECT verifier FROM oauth_states WHERE state = ?").get(state) as
+    | { verifier: string }
     | undefined;
-  const verifier = row?.user_id;
-  db.prepare("DELETE FROM sessions WHERE token = ?").run(`oauth:${state}`); // single use
+  const verifier = row?.verifier;
+  db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state); // single use
   if (!verifier) {
     return NextResponse.redirect(new URL("/login?error=bad_state", req.url));
   }

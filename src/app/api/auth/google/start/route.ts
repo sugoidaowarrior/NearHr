@@ -23,8 +23,8 @@ export async function GET() {
   // Stash PKCE verifier keyed by state (short TTL; single-use).
   getDb()
     .prepare(
-      "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, 'oauth', datetime('now', '+10 minutes'))"
+      "INSERT INTO oauth_states (state, verifier, expires_at) VALUES (?, ?, datetime('now', '+10 minutes'))"
     )
-    .run(`oauth:${state}`, verifier);
+    .run(state, verifier);
   return NextResponse.redirect(url);
 }
