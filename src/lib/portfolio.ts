@@ -24,11 +24,12 @@ export type AssetId = (typeof ASSETS)[number]["id"];
 export interface PriceMap {
   NEAR: number;
   USDC: number;
+  NGN: number;
   source: "live" | "fallback";
   at: number;
 }
 
-export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0 };
+export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0, NGN: 1500 };
 const PRICE_TTL_MS = 60_000;
 
 let priceCache: { at: number; map: PriceMap } | null = null;
@@ -67,12 +68,28 @@ async function fetchLiveNearUsd(): Promise<number | null> {
   return null;
 }
 
+async function fetchUsdNgn(): Promise<number | null> {
+  try {
+    const r = await fetch("https://open.er-api.com/v6/latest/USD", {
+      signal: AbortSignal.timeout(4000),
+      cache: "no-store",
+    });
+    if (!r.ok) return null;
+    const j = (await r.json().catch(() => null)) as { rates?: { NGN?: number } } | null;
+    const v = j?.rates?.NGN;
+    return typeof v === "number" && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getPrices(): Promise<PriceMap> {
   if (priceCache && Date.now() - priceCache.at < PRICE_TTL_MS) return priceCache.map;
-  const live = await fetchLiveNearUsd();
+  const [live, ngn] = await Promise.all([fetchLiveNearUsd(), fetchUsdNgn()]);
   const map: PriceMap = {
     NEAR: live ?? FALLBACK_USD.NEAR,
     USDC: FALLBACK_USD.USDC,
+    NGN: ngn ?? FALLBACK_USD.NGN,
     source: live != null ? "live" : "fallback",
     at: Date.now(),
   };

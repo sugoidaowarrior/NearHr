@@ -20,7 +20,7 @@ type Balance = {
   near: { yocto: string; human: string };
   usdc: { base: string; human: string };
 };
-type Prices = { NEAR: number; USDC: number; source: "live" | "fallback"; at: number };
+type Prices = { NEAR: number; USDC: number; NGN: number; source: "live" | "fallback"; at: number };
 type Employee = {
   id: string;
   name: string;
@@ -85,8 +85,48 @@ type Run = {
   executed_at: string | null;
   items: RunItem[];
 };
-type ChartPoint = { label: string; t: number; total: number; invested: number };
-type Range = "day" | "week" | "month" | "year";
+type SalaryMonth = {
+  key: string;
+  label: string;
+  monthTotal: number;
+  monthPaid: number;
+  paidCount: number;
+};
+type SalarySummary = {
+  nextPayroll: {
+    date: string | null;
+    dayName: string;
+    dayOfMonth: number;
+    monthName: string;
+    year: number;
+    frequency: string;
+    daysUntilDue: number | null;
+    dueEmployeeCount: number;
+    unpaidEmployeeCount: number;
+    isOverdue: boolean;
+  };
+  month: {
+    key: string;
+    name: string;
+    plannedNear: number;
+    plannedUsdc: number;
+    plannedNgn: number;
+    paidNear: number;
+    paidUsdc: number;
+    paidNgn: number;
+    paidCount: number;
+  };
+  pendingRuns: {
+    name: string;
+    asset: string;
+    status: string;
+    employee_count: number;
+    total: string;
+    created_at: string;
+  }[];
+  months: SalaryMonth[];
+  prices: { NEAR: number; USDC: number; NGN: number };
+};
 
 /* ── helpers ────────────────────────────────────────────────────────── */
 function api(path: string, opts?: RequestInit): Promise<any> {
@@ -100,6 +140,8 @@ function api(path: string, opts?: RequestInit): Promise<any> {
 }
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+const ngn = (n: number) =>
+  "₦" + Math.round(n).toLocaleString("en-NG");
 const shortAddr = (a: string) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || "…");
 const fmtDate = (s: string | null) => {
   if (!s) return "never";
@@ -129,20 +171,6 @@ function seeded(seed: number) {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
   return x - Math.floor(x);
 }
-function buildCandles(points: ChartPoint[]) {
-  const n = Math.max(points.length, 1);
-  return Array.from({ length: n }, (_, i) => {
-    const t = points[i]?.total ?? 0;
-    const r1 = seeded(i + 1);
-    const r2 = seeded(i + 71);
-    const r3 = seeded(i + 149);
-    const open = t * (0.95 + 0.1 * r1);
-    const close = t * (0.95 + 0.1 * r2);
-    const hi = Math.max(open, close) * (1.02 + 0.05 * r3);
-    const lo = Math.min(open, close) * (0.98 - 0.05 * r1);
-    return { up: close >= open, o: open, c: close, hi, lo };
-  });
-}
 
 /* ── sparkline (asset cards) ───────────────────────────────────────── */
 function Sparkline({ points, color }: { points: number[]; color: string }) {
@@ -164,88 +192,96 @@ function Sparkline({ points, color }: { points: number[]; color: string }) {
   );
 }
 
-/* ── analytics chart (candlestick, inline SVG, zero deps) ──────────── */
-function AnalyticsChart({ points, loading }: { points: ChartPoint[]; loading: boolean }) {
+/* ── payroll bar chart (disbursed vs total, grouped bars) ──────────── */
+function PayrollBars({ months, loading }: { months: SalaryMonth[]; loading: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 880;
   const H = 360;
-  const P = { l: 44, r: 16, t: 18, b: 30 };
+  const P = { t: 16, r: 16, b: 30, l: 72 };
   const iw = W - P.l - P.r;
   const ih = H - P.t - P.b;
-  const candles = useMemo(() => buildCandles(points), [points]);
-  const max = Math.max(1, ...candles.map((c) => c.hi));
-  const min = Math.min(0, ...candles.map((c) => c.lo));
-  const span = max - min || 1;
-  const n = Math.max(candles.length, 1);
-  const x = (i: number) => P.l + (n <= 1 ? iw / 2 : (i / (n - 1)) * (iw - 10) + 5);
-  const y = (v: number) => P.t + ih - ((v - min) / span) * ih;
-  const cw = Math.max(3, Math.min(14, (iw / n) * 0.55));
+  const n = Math.max(months.length, 1);
+  const max = Math.max(...months.map((m) => Math.max(m.monthTotal, m.monthPaid)), 1);
+  // round the top up to a clean multiple so the axis reads like 1M/2M/3M
+  const mag = Math.pow(10, Math.floor(Math.log10(max)));
+  const step = mag / 2;
+  const top = Math.ceil((max * 1.08) / step) * step;
+  const y = (v: number) => P.t + ih - (v / top) * ih;
+  const group = iw / n;
+  const barW = Math.min(30, group * 0.3);
   const yTicks = 4;
-  const xTickCount = Math.min(6, Math.max(2, n));
-  const xIdx = useMemo(() => {
-    const out: number[] = [];
-    for (let i = 0; i < xTickCount; i++) out.push(Math.round((i / (xTickCount - 1)) * (n - 1)));
-    return out;
-  }, [n, xTickCount]);
-  const fmt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v >= 10 ? v.toFixed(0) : v.toFixed(2));
+  const compact = (v: number) =>
+    v >= 1000
+      ? v >= 1_000_000
+        ? `${v / 1_000_000}M`
+        : `${v / 1000}K`
+      : `${Math.round(v)}`;
 
-  if (loading) return <div className="shimmer h-[360px] w-full" />;
-  if (!points.length)
+  if (loading) {
     return (
-      <div className="grid h-[360px] place-items-center text-sm text-[var(--color-faint)]">
-        No activity yet. Run payroll and the analytics come alive.
+      <div className="grid h-[360px] place-items-center">
+        <div className="pulse-dot text-xs text-[var(--color-faint)]">loading salary history</div>
       </div>
     );
+  }
 
   return (
     <div className="relative w-full">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }} onMouseLeave={() => setHover(null)}>
         {Array.from({ length: yTicks + 1 }).map((_, i) => {
-          const v = min + (span / yTicks) * i;
+          const v = (top / yTicks) * i;
           const yy = y(v);
           return (
             <g key={i}>
               <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke="var(--line-soft)" strokeDasharray="3 4" />
               <text x={P.l - 8} y={yy + 3} textAnchor="end" fill="var(--color-faint)" fontSize="10">
-                {fmt(v)}
+                {compact(v)}
               </text>
             </g>
           );
         })}
-        {candles.map((c, i) => {
-          const up = c.up;
-          const col = up ? "#22c55e" : "#ef4444";
-          const top = Math.min(y(c.o), y(c.c));
-          const hgt = Math.max(2, Math.abs(y(c.o) - y(c.c)));
+        {months.map((m, i) => {
+          const cx = P.l + group * i + group / 2;
+          const dim = hover == null || hover === i ? 1 : 0.5;
+          const totalY = y(m.monthTotal);
+          const paidY = y(m.monthPaid);
           return (
-            <g key={i} opacity={hover == null || hover === i ? 1 : 0.5}>
-              <line x1={x(i)} x2={x(i)} y1={y(c.hi)} y2={y(c.lo)} stroke={col} strokeWidth="1.4" />
-              <rect x={x(i) - cw / 2} y={top} width={cw} height={hgt} rx="1.5" fill={col} />
+            <g key={i} opacity={dim}>
+              {/* total payroll (dark) */}
+              <rect x={cx - barW - 3} y={totalY} width={barW} height={Math.max(2, P.t + ih - totalY)} rx="2" fill="#5b6474" />
+              {/* disbursed (light blue) */}
+              <rect x={cx + 3} y={paidY} width={barW} height={Math.max(2, P.t + ih - paidY)} rx="2" fill="#9db8ff" />
+              <text x={cx} y={H - 8} textAnchor="middle" fill="var(--color-faint)" fontSize="10">
+                {m.label}
+              </text>
+              <rect
+                x={P.l + group * i}
+                y={P.t}
+                width={group}
+                height={ih}
+                fill="transparent"
+                onMouseEnter={() => setHover(i)}
+              />
             </g>
           );
         })}
-        {xIdx.map((i, k) => (
-          <text key={k} x={x(i)} y={H - 8} textAnchor="middle" fill="var(--color-faint)" fontSize="10">
-            {points[i]?.label}
-          </text>
-        ))}
-        {hover != null && candles[hover] && (
-          <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={P.t + ih} stroke="var(--color-accent)" strokeWidth="1" strokeDasharray="3 3" />
+        {hover != null && months[hover] && (
+          <line x1={P.l + group * hover + group / 2} x2={P.l + group * hover + group / 2} y1={P.t} y2={P.t + ih} stroke="var(--color-accent)" strokeWidth="1" strokeDasharray="3 3" />
         )}
-        {candles.map((_, i) => (
-          <rect key={i} x={x(i) - iw / (n * 2)} y={P.t} width={iw / n} height={ih} fill="transparent" onMouseEnter={() => setHover(i)} />
-        ))}
       </svg>
-      {hover != null && candles[hover] && (
+      {hover != null && months[hover] && (
         <div
-          className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[var(--color-rule)] bg-[#0b0d14] px-3 py-2 text-xs shadow-xl"
-          style={{ left: `${Math.min(74, Math.max(2, (x(hover) / W) * 100))}%` }}
+          className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-3 py-2 text-xs shadow-xl"
+          style={{ left: `${Math.min(74, Math.max(2, ((P.l + group * hover + group / 2) / W) * 100))}%` }}
         >
-          <div className="mb-1 text-[var(--color-faint)]">{points[hover].label}</div>
-          <div className="font-semibold">{usd(candles[hover].c)}</div>
-          <div className="text-[var(--color-faint)]">
-            h {usd(candles[hover].hi)} · l {usd(candles[hover].lo)}
+          <div className="mb-1 text-[var(--color-faint)]">{months[hover].label}</div>
+          <div className="flex items-center gap-1.5 font-semibold">
+            <span className="h-2 w-2 bg-[#5b6474]" /> Total payroll {ngn(months[hover].monthTotal)}
           </div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="h-2 w-2 bg-[#9db8ff]" /> Disbursed {ngn(months[hover].monthPaid)}
+          </div>
+          <div className="mt-0.5 text-[var(--color-faint)]">{months[hover].paidCount} payment{months[hover].paidCount === 1 ? "" : "s"} sent</div>
         </div>
       )}
     </div>
@@ -449,9 +485,7 @@ export default function Dashboard() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
-  const [range, setRange] = useState<Range>("month");
-  const [chart, setChart] = useState<ChartPoint[]>([]);
-  const [chartLoading, setChartLoading] = useState(true);
+  const [salary, setSalary] = useState<SalarySummary | null>(null);
   const [loadErr, setLoadErr] = useState("");
 
   const [sendOpen, setSendOpen] = useState(false);
@@ -478,12 +512,13 @@ export default function Dashboard() {
       const me = await api("/api/me");
       setUser(me.user);
       // Every user is an HR operator of their own workspace.
-      const [pf, emps, pay, sch, runRes] = await Promise.all([
+      const [pf, emps, pay, sch, runRes, sal] = await Promise.all([
         api("/api/portfolio").catch(() => null),
         api("/api/employees").catch(() => ({ employees: [] })),
         api("/api/payments").catch(() => ({ payments: [] })),
         api("/api/schedule").catch(() => null),
         api("/api/payroll/runs").catch(() => ({ runs: [] })),
+        api("/api/payroll/summary").catch(() => null),
       ]);
       if (pf) {
         setPrices(pf.prices);
@@ -494,6 +529,7 @@ export default function Dashboard() {
       setPayments(pay.payments);
       setSchedule(sch?.schedule ?? null);
       setRuns(runRes.runs);
+      setSalary(sal ?? null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "unauthorized") router.replace("/login");
@@ -520,35 +556,6 @@ export default function Dashboard() {
     loadFast();
     loadBalance();
   }, [loadFast, loadBalance]);
-
-  const totalUsd = useMemo(() => {
-    if (!balance || !prices) return null;
-    return Number(balance.near.human) * prices.NEAR + Number(balance.usdc.human) * prices.USDC;
-  }, [balance, prices]);
-
-  const loadChart = useCallback(async (r: Range, total: number) => {
-    setChartLoading(true);
-    try {
-      const data = await api(`/api/portfolio/chart?range=${r}&total=${total.toFixed(2)}`);
-      setChart(data.points);
-    } catch {
-      setChart([]);
-    } finally {
-      setChartLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isEmployer && totalUsd != null) loadChart(range, totalUsd);
-  }, [isEmployer, totalUsd, range, loadChart]);
-
-  const change = useMemo(() => {
-    if (chart.length < 2) return null;
-    const first = chart[0].total;
-    const last = chart[chart.length - 1].total;
-    if (!first) return 0;
-    return ((last - first) / first) * 100;
-  }, [chart]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([loadFast(), loadBalance(true)]);
@@ -757,7 +764,6 @@ export default function Dashboard() {
   const usdcAmt = balance ? Number(balance.usdc.human) : 0;
   const spark = (i: number, k = 26) =>
     Array.from({ length: k }, (_, j) => 50 + 32 * seeded(i * 131 + j * 7) + 14 * Math.sin(j / 2.1 + i));
-  const nearChange = change ?? 0;
   const filteredEmps = query
     ? employees.filter((e) =>
         [e.name, e.email ?? "", e.department ?? "", e.wallet, e.jobTitle ?? ""].join(" ").toLowerCase().includes(query.toLowerCase())
@@ -851,39 +857,87 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* hero banner */}
-          <section className="mt-5">
-            <div className="hero-banner fade-up p-6 md:p-8">
-              <div className="globe" aria-hidden />
-              <img src="/img/hero-payment.svg" alt="Payroll payout flow" className="art hidden md:block" />
-              <div className="relative z-10 max-w-[62%]">
-                <div className="eyebrow">Welcome back</div>
-                <h2 className="mt-2 font-[var(--font-display)] text-2xl font-bold leading-tight tracking-tight text-white md:text-[32px]">
-                  Make Your Crypto Transaction Easier
-                </h2>
-                <p className="mt-3 text-sm text-[#9aa0b4]">Check your daily payroll report</p>
-                <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>Run payroll</button>
-                  <button className="btn btn-primary btn-sm" onClick={() => setEmpModal({ editing: null })}>Add employee</button>
-                  <button className="btn btn-ghost btn-sm !border-white/25 !text-white hover:!border-white/60 hover:!text-white hover:!bg-white/10" onClick={() => setSwapOpen(true)}>
-                    Swap NEAR and USDC
-                  </button>
+          {/* next payroll + total salary */}
+          <section className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="fade-up rounded-2xl bg-gradient-to-br from-[#4d65ff] to-[#0082f3] p-6 text-white lg:col-span-2">
+              <div className="flex items-start gap-4">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/15">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="3" y="4" width="18" height="17" rx="2.5" />
+                    <path d="M3 9h18M8 2v4M16 2v4" />
+                    <path d="M14.5 13.2a3 3 0 1 0-5 0M9.5 16.5h5" />
+                    <circle cx="12" cy="13" r="1.6" fill="currentColor" stroke="none" />
+                    <path d="M12 14.6v1.9" />
+                  </svg>
                 </div>
-                <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
-                  {balanceLoading ? (
-                    <span className="pill pill-muted pulse-dot">checking on chain</span>
-                  ) : balance?.funded ? (
-                    <span className="pill pill-green">
-                      <span className="h-1.5 w-1.5 bg-[#22c55e]" /> wallet active
-                    </span>
-                  ) : (
-                    <span className="pill pill-warn">
-                      <span className="h-1.5 w-1.5 bg-[#f59e0b]" /> fund your wallet to start
-                    </span>
-                  )}
-                  {prices && <span className="mono text-xs text-[#9aa0b4]">1 NEAR = {usd(prices.NEAR)}</span>}
+                <div className="min-w-0">
+                  <h2 className="font-[var(--font-display)] text-xl font-bold tracking-tight md:text-2xl">
+                    {salary?.nextPayroll.date
+                      ? `Next Payroll (${salary.nextPayroll.monthName} ${salary.nextPayroll.dayOfMonth})`
+                      : "Next Payroll"}
+                  </h2>
+                  <p className="mt-1.5 text-sm text-[#dfe6ff]">
+                    {salary?.nextPayroll.date
+                      ? `Payroll runs automatically before close of business on ${salary.nextPayroll.dayName}, ${salary.nextPayroll.monthName} ${salary.nextPayroll.dayOfMonth}${salary.nextPayroll.year !== new Date().getFullYear() ? `, ${salary.nextPayroll.year}` : ""}.`
+                      : "Set a payday schedule to see your next run here."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                    <button
+                      className="btn btn-sm bg-white font-bold text-[#2b3fb8] hover:bg-[#e8edff]"
+                      onClick={() => setPayrollOpen(true)}
+                    >
+                      Run payroll now
+                    </button>
+                    <button
+                      className="btn btn-sm border border-white/40 text-white hover:border-white hover:bg-white/10"
+                      onClick={() => setEmpModal({ editing: null })}
+                    >
+                      Add employee
+                    </button>
+                    {salary && salary.pendingRuns.length > 0 && (
+                      <span className="text-xs text-[#dfe6ff]">
+                        {salary.pendingRuns.length} run{salary.pendingRuns.length === 1 ? "" : "s"} waiting to execute
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+            </div>
+
+            <div className="fade-up d1 glass flex flex-col justify-center p-6">
+              <div className="flex items-center gap-2.5">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 6.5v11M14.8 8.6c-.6-.9-1.6-1.4-2.8-1.4-1.7 0-3 .9-3 2.2 0 2.9 6 1.6 6 4.4 0 1.3-1.3 2.2-3 2.2-1.2 0-2.3-.5-2.9-1.4" />
+                  </svg>
+                </div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+                  Total salary (this month)
+                </div>
+              </div>
+              <div className="mt-3 mono text-3xl font-bold tracking-tight">
+                {salary ? (
+                  <>
+                    <span className="mr-1.5 align-baseline text-2xl font-semibold">₦</span>
+                    {Math.round(salary.month.plannedNgn).toLocaleString("en-NG")}
+                  </>
+                ) : (
+                  "…"
+                )}
+              </div>
+              <div className="mt-2 text-xs text-[var(--color-faint)]">
+                {salary
+                  ? `${salary.month.plannedNear > 0 ? `${salary.month.plannedNear.toLocaleString()} NEAR` : ""}${
+                      salary.month.plannedNear > 0 && salary.month.plannedUsdc > 0 ? " + " : ""
+                    }${salary.month.plannedUsdc > 0 ? `${salary.month.plannedUsdc.toLocaleString()} USDC` : ""} · ${salary.month.paidCount} payment${salary.month.paidCount === 1 ? "" : "s"} sent`
+                  : "Calculating from active employees"}
+              </div>
+              {salary && salary.month.paidNgn > 0 && (
+                <div className="mt-2 text-xs text-[var(--color-muted)]">
+                  {ngn(salary.month.paidNgn)} already disbursed
+                </div>
+              )}
             </div>
           </section>
 
@@ -940,9 +994,7 @@ export default function Dashboard() {
               </div>
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("NEAR")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
-                <span className={`pill ${nearChange >= 0 ? "pill-green" : "pill-danger"}`}>
-                  {nearChange >= 0 ? "▲" : "▼"} {Math.abs(nearChange).toFixed(2)}%
-                </span>
+                <span className="pill pill-muted">native</span>
                 <span className="mono text-[var(--color-faint)]">{prices ? `= ${usd(nearAmt * prices.NEAR)}` : "…"}</span>
               </div>
               <Sparkline points={spark(1)} color="#4d65ff" />
@@ -985,27 +1037,19 @@ export default function Dashboard() {
             <div className="glass fade-up d2 p-5 lg:col-span-8">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="section-title">
-                  <span className="mono text-[var(--color-faint)]">A.</span> Analytics
+                  <span className="mono text-[var(--color-faint)]">A.</span> Salary history
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="hidden items-center gap-4 text-xs text-[var(--color-muted)] sm:flex">
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 bg-[#22c55e]" /> up
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 bg-[#ef4444]" /> down
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {([["1m", "day"], ["3m", "week"], ["6m", "month"], ["1y", "year"]] as [string, Range][]).map(([label, r]) => (
-                      <button key={r} className={`range-chip ${range === r ? "active" : ""}`} onClick={() => setRange(r)}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="hidden items-center gap-4 text-xs text-[var(--color-muted)] sm:flex">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm bg-[#9db8ff]" /> Disbursed payment
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm bg-[#5b6474]" /> Total payroll
+                  </span>
                 </div>
+                <span className="mono text-xs text-[var(--color-faint)]">last 6 paydays</span>
               </div>
-              <AnalyticsChart points={chart} loading={chartLoading || (balanceLoading && totalUsd == null)} />
+              <PayrollBars months={salary?.months ?? []} loading={!salary} />
             </div>
 
             <div className="flex flex-col gap-4 lg:col-span-4">
