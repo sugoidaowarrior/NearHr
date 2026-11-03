@@ -133,7 +133,7 @@ export function makeBackupBundle(appId: string, vaultRecord: string): BackupBund
     appId,
     generatedAt: new Date().toISOString(),
     note:
-      "HushPay backup. Keep this file and your backup passphrase safe. To restore: HushPay → Log in → 'Restore from backup' → upload this file → enter passphrase.",
+      "NearHr backup (encrypted). Keep this file somewhere safe. If you ever lose access to NearHr, contact support with this file and proof of identity. It lets your vault be recreated. No passphrase needed: your login is the key.",
     vault: JSON.parse(vaultRecord),
   };
 }

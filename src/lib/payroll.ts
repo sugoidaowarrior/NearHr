@@ -27,6 +27,8 @@ import {
   NearConfig,
   defaultNearConfig,
 } from "./near";
+import { recordPayment, fromBase } from "./payments";
+import { findEmployee } from "./employees";
 
 export const MAX_EMPLOYEES_PER_RUN = 50;
 
@@ -292,6 +294,7 @@ export async function executeRun(
 
   const account = accountFromVault(vault.nearAccount, vault.nearMasterKey);
   const asset = String(run.asset);
+  const employerId = String(run.employer_id);
   const results: ExecuteResult["results"] = [];
   let executed = 0;
   let failed = 0;
@@ -312,7 +315,7 @@ export async function executeRun(
       let dest = "";
       if (privacy === "transparent") {
         // Destination: the NEAR account the employer supplied in the CSV, else
-        // fall back to a registered HushPay user with that email.
+        // fall back to a registered NearHr user with that email.
         dest = (item.near_account as string | null) ?? (await resolveTransparentDest(email)) ?? "";
         if (!dest) throw new Error("no NEAR account for transparent recipient");
         if (asset === "NEAR") {
@@ -336,6 +339,28 @@ export async function executeRun(
         item.id
       );
       executed++;
+      // ledger: link the payout to the employee directory (best effort) so
+      // "last paid" stays accurate. Never let a ledger hiccup fail the run.
+      try {
+        const empId = findEmployee(employerId, {
+          email,
+          wallet: privacy === "transparent" ? dest : undefined,
+        });
+        recordPayment({
+          employerId,
+          employeeId: empId,
+          recipientName: String(item.recipient_name ?? ""),
+          recipientWallet: dest,
+          kind: "payroll",
+          asset: asset as "NEAR" | "USDC",
+          amount: fromBase(asset as "NEAR" | "USDC", amountStr),
+          note: String(run.name),
+          txRef: txHash || "ok",
+          status: "sent",
+        });
+      } catch {
+        // ignore ledger errors
+      }
       results.push({ email, status: "executed", txRef: txHash });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -355,7 +380,7 @@ export async function executeRun(
 
 /**
  * Resolve the destination account for a transparent transfer.
- * Order: (1) a registered HushPay user with that email, (2) the item's
+ * Order: (1) a registered NearHr user with that email, (2) the item's
  * stealth meta's underlying account is NOT valid for transparent — so require
  * the employer to have supplied a NEAR account. For MVP we accept the email
  * matching a user's NEAR account, else we require the row to carry one.

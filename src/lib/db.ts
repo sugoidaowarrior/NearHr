@@ -95,8 +95,57 @@ export function initDb(): void {
       expires_at      TEXT NOT NULL
     );
 
+    -- Employee directory (employer-managed roster)
+    CREATE TABLE IF NOT EXISTS employees (
+      id              TEXT PRIMARY KEY,
+      employer_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      email           TEXT,
+      department      TEXT,
+      job_title       TEXT,
+      wallet          TEXT,                          -- NEAR account address to pay
+      asset           TEXT NOT NULL DEFAULT 'NEAR',  -- NEAR | USDC
+      salary          TEXT NOT NULL DEFAULT '0',     -- human amount per pay period
+      frequency       TEXT NOT NULL DEFAULT 'monthly', -- monthly | biweekly | weekly
+      pay_day         INTEGER,                       -- day of month for monthly (1..28)
+      status          TEXT NOT NULL DEFAULT 'active', -- active | offboarded
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Payment ledger: every payout (payroll run line items OR one-off sends)
+    CREATE TABLE IF NOT EXISTS payments (
+      id              TEXT PRIMARY KEY,
+      employer_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      employee_id     TEXT REFERENCES employees(id) ON DELETE SET NULL,
+      recipient_name  TEXT,
+      recipient_wallet TEXT,
+      kind            TEXT NOT NULL,                 -- payroll | send
+      asset           TEXT NOT NULL,
+      amount          TEXT NOT NULL,                 -- human amount
+      note            TEXT,
+      tx_ref          TEXT,
+      status          TEXT NOT NULL DEFAULT 'sent',  -- sent | pending | failed
+      paid_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Payroll reminder schedule (payday + when HR gets reminded)
+    CREATE TABLE IF NOT EXISTS payroll_schedules (
+      employer_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      frequency       TEXT NOT NULL DEFAULT 'monthly', -- monthly | biweekly | weekly
+      pay_day         INTEGER NOT NULL DEFAULT 28,
+      reminder_days   INTEGER NOT NULL DEFAULT 3,
+      remind_email    TEXT,
+      active          INTEGER NOT NULL DEFAULT 1,
+      next_due        TEXT,                          -- date (YYYY-MM-DD)
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_items_run ON payroll_items(run_id);
     CREATE INDEX IF NOT EXISTS idx_runs_employer ON payroll_runs(employer_id);
+    CREATE INDEX IF NOT EXISTS idx_emp_employer ON employees(employer_id);
+    CREATE INDEX IF NOT EXISTS idx_pay_employer ON payments(employer_id);
+    CREATE INDEX IF NOT EXISTS idx_pay_employee ON payments(employee_id);
   `);
 
   // One-off migrations (safe to run every boot: no-op when already migrated).

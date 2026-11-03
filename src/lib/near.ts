@@ -1,7 +1,7 @@
 /**
  * NEAR layer (near-api-js v7 API).
  *
- * Custodial model: HushPay holds an ed25519 master key per user. That key is
+ * Custodial model: NearHr holds an ed25519 master key per user. That key is
  * attached (full access) to the user's smart-account contract so the server can
  * sign transfers on their behalf. All secrets live encrypted in the vault.
  *
@@ -134,6 +134,41 @@ export function usdcToBase(amount: number | string): bigint {
 /** Total balance in yoctoNEAR. */
 export async function balanceOf(account: Account): Promise<bigint> {
   return account.getBalance();
+}
+
+/**
+ * USDC (nep141) balance for an account, in base units (6 decimals).
+ * Uses a plain view call — works for implicit accounts (returns 0 if unfunded).
+ */
+export async function usdcBalanceOf(owner: string, cfg: NearConfig = defaultNearConfig()): Promise<bigint> {
+  const contractId = cfg.networkId === "mainnet" ? USDC_MAIN.accountId : USDC_TEST.accountId;
+  const argsBase64 = Buffer.from(JSON.stringify({ account_id: owner })).toString("base64");
+  const res = (await nearProvider(cfg).query({
+    request_type: "call_function",
+    account_id: contractId,
+    method_name: "ft_balance_of",
+    args_base64: argsBase64,
+    finality: "optimistic",
+  } as never)) as unknown as { result?: unknown[] };
+
+  // call_function returns raw bytes of the method's serialized return value.
+  const bytes = res.result;
+  if (!bytes || !Array.isArray(bytes) || bytes.length === 0) return 0n;
+  const text = Buffer.from(bytes as number[]).toString("utf8").trim();
+  let amount = "0";
+  if (text.startsWith("{")) {
+    // e.g. {"amount":"1000"}
+    try {
+      const obj = JSON.parse(text) as { amount?: unknown };
+      amount = String(obj.amount ?? "0");
+    } catch {
+      amount = "0";
+    }
+  } else {
+    // e.g. "1000" or 1000
+    amount = text.replace(/^"|"$/g, "").trim();
+  }
+  return amount ? BigInt(amount) : 0n;
 }
 
 export { PublicKey, teraToGas };

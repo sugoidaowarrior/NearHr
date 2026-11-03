@@ -1,86 +1,187 @@
 import Link from "next/link";
 
+const levels = [
+  {
+    tag: "LEVEL 0",
+    tagClass: "pill-muted",
+    coin: "coin-slate",
+    title: "Transparent",
+    body: "Standard onchain payout to each employee's NEAR account. Cheap, instant, fully public.",
+  },
+  {
+    tag: "LEVEL 1",
+    tagClass: "pill-green",
+    coin: "coin-lime",
+    title: "Shielded",
+    body: "Each payment lands in a one time stealth account (SIP Protocol). Only the recipient can claim it.",
+  },
+  {
+    tag: "LEVEL 2",
+    tagClass: "pill-magenta",
+    coin: "coin-magenta",
+    title: "Compliant",
+    body: "Shielded, plus a viewing key lets your auditor verify every payment — without exposing who got paid.",
+  },
+];
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <header className="border-b border-zinc-800">
-        <div className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between">
-          <div className="text-lg font-semibold tracking-tight">
-            Hush<span className="text-emerald-400">Pay</span>
-            <span className="ml-3 text-xs font-normal text-zinc-500">private payroll on NEAR</span>
+    <main className="min-h-screen overflow-x-clip">
+      <div className="aurora" />
+
+      {/* floating coins */}
+      <div className="pointer-events-none fixed inset-0 -z-[0]" aria-hidden>
+        <div className="coin coin-lime coin-ring float absolute left-[8%] top-[16%] h-16 w-16 opacity-80">
+          N
+        </div>
+        <div className="coin coin-magenta coin-ring float-slow absolute right-[10%] top-[22%] h-12 w-12 opacity-70">
+          U
+        </div>
+        <div className="coin coin-yellow coin-ring float absolute left-[14%] bottom-[24%] h-10 w-10 opacity-60" style={{ animationDelay: "1.4s" }}>
+          ₮
+        </div>
+        <div className="coin coin-blue coin-ring float-slow absolute right-[16%] bottom-[30%] h-14 w-14 opacity-50" style={{ animationDelay: "0.8s" }}>
+          $
+        </div>
+      </div>
+
+      <header className="relative z-10">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
+          <div className="flex items-center gap-3">
+            <div className="coin coin-lime coin-ring h-9 w-9 text-sm">N</div>
+            <div className="text-lg font-bold tracking-tight">
+              Near<span className="text-[var(--accent)]">Hr</span>
+            </div>
           </div>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/dashboard" className="text-zinc-400 hover:text-zinc-200">Payroll runs</Link>
+          <nav className="flex items-center gap-3">
             <Link
               href="/api/auth/google/start"
-              className="rounded-lg bg-emerald-500 px-4 py-1.5 font-medium text-zinc-950 hover:bg-emerald-400"
+              className="btn btn-ghost hidden !py-2 text-sm sm:inline-flex"
             >
-              Sign in with Google
+              Sign in
+            </Link>
+            <Link href="/api/auth/google/start" className="btn btn-primary !py-2 text-sm">
+              Get started
             </Link>
           </nav>
         </div>
       </header>
 
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <h1 className="text-5xl font-bold tracking-tight leading-tight">
-          Payroll that stays <span className="text-emerald-400">private</span>.
+      {/* hero */}
+      <section className="relative z-10 mx-auto max-w-5xl px-6 pt-14 pb-20 sm:pt-24">
+        <div className="fade-up pill pill-green">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] pulse-dot" />
+          Private payroll on NEAR Protocol
+        </div>
+        <h1 className="fade-up d1 mt-6 text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+          Pay your team.
           <br />
-          Your people, your terms.
+          <span className="bg-gradient-to-r from-[#54f754] via-[#3df03d] to-[#e15be1] bg-clip-text text-transparent">
+            Keep it private.
+          </span>
         </h1>
-        <p className="mt-6 max-w-2xl text-lg text-zinc-400">
-          HushPay pays salaries and bonuses on NEAR Protocol with optional privacy, in three
-          levels. Log in with Google, back up with a second email, and pay up to 50 people per
-          run — in NEAR or USDC.
+        <p className="fade-up d2 mt-6 max-w-2xl text-lg leading-relaxed text-[var(--muted)]">
+          Salaries and bonuses in NEAR or USDC, with privacy in three levels. Sign in with
+          Google and your private wallet is created automatically. Pay up to 50 people per run.
+          No seed phrases. No passphrases. Nothing to set up.
         </p>
-        <div className="mt-8 flex gap-4">
-          <Link
-            href="/api/auth/google/start"
-            className="rounded-lg bg-emerald-500 px-6 py-3 font-medium text-zinc-950 hover:bg-emerald-400"
-          >
-            Get started
+        <div className="fade-up d3 mt-9 flex flex-wrap items-center gap-4">
+          <Link href="/api/auth/google/start" className="btn btn-primary !px-7 !py-3.5 !text-[15px]">
+            Open your wallet
           </Link>
-          <Link href="/dashboard" className="rounded-lg border border-zinc-700 px-6 py-3 text-zinc-300 hover:border-zinc-500">
-            See a payroll run
+          <Link href="/login" className="btn btn-ghost !px-7 !py-3.5 !text-[15px]">
+            I have an account
           </Link>
         </div>
-
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {[
-            {
-              title: "Transparent",
-              body: "Standard on-chain payout to each employee's NEAR account. Cheap, instant, fully public.",
-              tag: "level 0",
-            },
-            {
-              title: "Shielded",
-              body: "Each payment lands in a one-time stealth account (SIP Protocol). The recipient can't be linked to the employee — only they can claim it.",
-              tag: "level 1",
-            },
-            {
-              title: "Compliant",
-              body: "Shielded, plus a viewing key lets your auditor verify every payment was made — without exposing who got paid.",
-              tag: "level 2",
-            },
-          ].map((c) => (
-            <div key={c.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-              <div className="text-xs uppercase tracking-wider text-emerald-400">{c.tag}</div>
-              <div className="mt-2 font-semibold text-lg">{c.title}</div>
-              <p className="mt-2 text-sm text-zinc-400">{c.body}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-12 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-5 text-sm text-amber-200/80">
-          <strong className="text-amber-200">Honest risk note.</strong> The deeper privacy upgrade
-          (full ZK shielded pool) routes through NEAR Intents — a centralized rail whose
-          compliance layer has paused funds before (July &amp; October 2026). MVP uses
-          on-chain stealth accounts, so your funds are never held by a third party — but
-          privacy is weaker (sender is visible). Read the README before going live.
+        <div className="fade-up d4 mt-10 flex flex-wrap gap-x-8 gap-y-3 text-[13px] text-[var(--muted-2)]">
+          <span>✓ Google sign in, wallet in seconds</span>
+          <span>✓ NEAR + USDC payouts</span>
+          <span>✓ Optional encrypted email backup</span>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-800 py-8 text-center text-xs text-zinc-600">
-        HushPay MVP · NEAR Protocol · SIP stealth addresses · custodial smart accounts
+      {/* wallet preview card */}
+      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-24">
+        <div className="glass hero-card fade-up d3 mx-auto max-w-3xl p-8 sm:p-10">
+          <div className="relative">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[13px] font-medium text-[var(--muted)]">
+                  Available balance
+                </div>
+                <div className="mt-1 text-5xl font-bold tracking-tight text-white">
+                  0.00
+                  <span className="ml-2 text-xl font-semibold text-[var(--muted)]">NEAR</span>
+                </div>
+                <div className="mt-2 text-sm text-[var(--muted)]">
+                  0.00 USDC
+                </div>
+              </div>
+              <div className="coin-stack flex">
+                <div className="coin coin-lime coin-ring h-9 w-9 text-xs">N</div>
+                <div className="coin coin-blue coin-ring h-9 w-9 text-xs">$</div>
+                <div className="coin coin-magenta coin-ring h-9 w-9 text-xs">S</div>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <span className="mono rounded-xl border border-[var(--line)] bg-black/30 px-3 py-1.5 text-[13px] text-[var(--muted)]">
+                your 64 character NEAR address appears here
+              </span>
+              <span className="pill pill-green">auto created on login</span>
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-3 border-t border-[var(--line)] pt-6 text-center">
+              {[
+                ["50", "people per run"],
+                ["3", "privacy levels"],
+                ["2", "assets: NEAR · USDC"],
+              ].map(([n, l]) => (
+                <div key={l}>
+                  <div className="text-2xl font-bold text-white">{n}</div>
+                  <div className="mt-1 text-[12px] text-[var(--muted-2)]">{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* privacy levels */}
+      <section className="relative z-10 mx-auto max-w-5xl px-6 pb-24">
+        <div className="fade-up flex items-end justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">
+              Privacy, in levels you choose
+            </h2>
+            <p className="mt-2 text-[var(--muted)]">
+              Every payroll run picks its own level, per payment, not per company.
+            </p>
+          </div>
+        </div>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {levels.map((c, i) => (
+            <div key={c.title} className={`glass fade-up d${i + 1} p-6`}>
+              <div className="flex items-center justify-between">
+                <span className={`pill ${c.tagClass}`}>{c.tag}</span>
+                <div className={`coin ${c.coin} coin-ring h-10 w-10 text-sm`}>
+                  {c.title[0]}
+                </div>
+              </div>
+              <div className="mt-4 text-xl font-semibold">{c.title}</div>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* footer */}
+      <footer className="relative z-10 border-t border-[var(--line)] py-8 text-center text-xs text-[var(--muted-2)]">
+        NearHr · NEAR Protocol · SIP stealth addresses · custodial smart accounts
+        <div className="mt-2">
+          <span className="text-amber-300/70">
+            Note: deep ZK privacy rides NEAR Intents, a rail with past compliance pauses. The MVP
+            uses onchain stealth accounts instead.
+          </span>
+        </div>
       </footer>
     </main>
   );

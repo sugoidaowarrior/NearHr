@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "no valid rows" }, { status: 400 });
 
   // Mode sanity: transparent rows need a NEAR account (employee registered in
-  // HushPay); shielded/compliant rows need the stealth meta in the CSV.
+  // NearHr); shielded/compliant rows need the stealth meta in the CSV.
   const problems: string[] = [];
   for (const e of parsed.employees) {
     const p = e.privacy ?? privacy;

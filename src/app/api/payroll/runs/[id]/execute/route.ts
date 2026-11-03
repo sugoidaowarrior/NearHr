@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { resolveSession, COOKIE } from "@/lib/sessions";
-import { unlockVault } from "@/lib/vault";
 import { executeRun } from "@/lib/payroll";
+import { ensureVault, unlockVault } from "@/lib/vault";
 
-
-// POST /api/payroll/runs/:id/execute  { passphrase }
-// Employer confirms with their backup passphrase; we unlock the vault, sign
-// with their master key, and execute each line item (sequential).
+// POST /api/payroll/runs/:id/execute
+// Employer confirms the run; the vault auto-unlocks (no passphrase), we sign
+// with their master key and execute each line item (sequential).
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,13 +20,12 @@ export async function POST(
   if (role !== "employer")
     return NextResponse.json({ error: "employer role required" }, { status: 403 });
 
-  const body = await req.json().catch(() => null);
-  const passphrase = String(body?.passphrase ?? "");
   let vault;
   try {
-    vault = unlockVault(userId, passphrase);
+    ensureVault(userId);
+    vault = unlockVault(userId);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 
   try {

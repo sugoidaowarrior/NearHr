@@ -24,7 +24,7 @@ export function appUrl(): string {
 
 export function googleClientId(): string {
   const id = process.env.GOOGLE_CLIENT_ID;
-  if (!id) throw new Error("GOOGLE_CLIENT_ID not set — see .env.example");
+  if (!id) throw new Error("GOOGLE_CLIENT_ID not set. See .env.example");
   return id;
 }
 

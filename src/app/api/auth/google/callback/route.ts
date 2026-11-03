@@ -28,8 +28,10 @@ export async function GET(req: NextRequest) {
   let profile;
   try {
     profile = await exchangeCode(code, verifier);
+    console.log(`[auth] google ok for ${profile.email} (sub ${profile.sub})`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.log(`[auth] google exchange failed: ${msg}`);
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(msg)}`, req.url));
   }
   // Upsert user
@@ -44,8 +46,12 @@ export async function GET(req: NextRequest) {
   ).run(profile.sub, profile.email, profile.name, profile.avatar, isEmployer ? "employer" : "employee");
 
   const { token, expiresAt } = issueSession(profile.sub);
-  const res = NextResponse.redirect(new URL("/", req.url));
-  res.cookies.set(COOKIE, token, sessionCookieOptions(process.env.NODE_ENV === "production"));
-  res.cookies.set(COOKIE + "_exp", expiresAt.toISOString(), sessionCookieOptions(process.env.NODE_ENV === "production"));
+  // Secure only on real HTTPS — a Secure cookie set over http://localhost
+  // would be dropped by browsers (NODE_ENV=production is not a reliable signal).
+  const secure = req.url.startsWith("https");
+  const res = NextResponse.redirect(new URL("/dashboard", req.url));
+  res.cookies.set(COOKIE, token, sessionCookieOptions(secure));
+  res.cookies.set(COOKIE + "_exp", expiresAt.toISOString(), sessionCookieOptions(secure));
+  console.log(`[auth] session issued, redirecting to /dashboard (secure=${secure})`);
   return res;
 }
