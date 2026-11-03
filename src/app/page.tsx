@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GlassRing } from "@/components/GlassRing";
 
 const levels = [
   {
@@ -28,19 +29,20 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-x-clip">
       <div className="aurora" />
+      <GlassRing />
 
       {/* floating coins */}
-      <div className="pointer-events-none fixed inset-0 -z-[0]" aria-hidden>
-        <div className="coin coin-lime coin-ring float absolute left-[8%] top-[16%] h-16 w-16 opacity-80">
+      <div className="coin-float-layer pointer-events-none fixed inset-0 -z-[0]" aria-hidden>
+        <div className="coin coin-lime coin-ring float absolute left-[3%] top-[12%] h-14 w-14 opacity-60">
           N
         </div>
-        <div className="coin coin-magenta coin-ring float-slow absolute right-[10%] top-[22%] h-12 w-12 opacity-70">
+        <div className="coin coin-magenta coin-ring float-slow absolute right-[4%] top-[26%] h-11 w-11 opacity-50">
           U
         </div>
-        <div className="coin coin-yellow coin-ring float absolute left-[14%] bottom-[24%] h-10 w-10 opacity-60" style={{ animationDelay: "1.4s" }}>
+        <div className="coin coin-yellow coin-ring float absolute left-[5%] bottom-[14%] h-9 w-9 opacity-40" style={{ animationDelay: "1.4s" }}>
           ₮
         </div>
-        <div className="coin coin-blue coin-ring float-slow absolute right-[16%] bottom-[30%] h-14 w-14 opacity-50" style={{ animationDelay: "0.8s" }}>
+        <div className="coin coin-blue coin-ring float-slow absolute right-[6%] bottom-[20%] h-12 w-12 opacity-40" style={{ animationDelay: "0.8s" }}>
           $
         </div>
       </div>
@@ -73,12 +75,10 @@ export default function Home() {
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] pulse-dot" />
           Private payroll on NEAR Protocol
         </div>
-        <h1 className="fade-up d1 mt-6 text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+        <h1 className="fade-up d1 display mt-6">
           Pay your team.
           <br />
-          <span className="bg-gradient-to-r from-[#54f754] via-[#3df03d] to-[#e15be1] bg-clip-text text-transparent">
-            Keep it private.
-          </span>
+          <span className="display-accent">Keep it private.</span>
         </h1>
         <p className="fade-up d2 mt-6 max-w-2xl text-lg leading-relaxed text-[var(--muted)]">
           Salaries and bonuses in NEAR or USDC, with privacy in three levels. Sign in with
@@ -102,7 +102,7 @@ export default function Home() {
 
       {/* wallet preview card */}
       <section className="relative z-10 mx-auto max-w-5xl px-6 pb-24">
-        <div className="glass hero-card fade-up d3 mx-auto max-w-3xl p-8 sm:p-10">
+        <div className="glass hero-card sheen glow fade-up d3 mx-auto max-w-3xl p-8 sm:p-10">
           <div className="relative">
             <div className="flex items-start justify-between">
               <div>
@@ -159,7 +159,7 @@ export default function Home() {
         </div>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {levels.map((c, i) => (
-            <div key={c.title} className={`glass fade-up d${i + 1} p-6`}>
+            <div key={c.title} className={`glass glass-hover fade-up d${i + 1} p-6`}>
               <div className="flex items-center justify-between">
                 <span className={`pill ${c.tagClass}`}>{c.tag}</span>
                 <div className={`coin ${c.coin} coin-ring h-10 w-10 text-sm`}>

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { resolveSession, COOKIE } from "@/lib/sessions";
+import { GlassRing } from "@/components/GlassRing";
 
 // Blocking route: reads the session cookie per request (Next 16 cacheComponents).
 export const instant = false;
@@ -15,7 +16,8 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   return (
     <main className="min-h-screen overflow-x-clip">
       <div className="aurora" />
-      <div className="pointer-events-none fixed inset-0" aria-hidden>
+      <GlassRing />
+      <div className="coin-float-layer pointer-events-none fixed inset-0" aria-hidden>
         <div className="coin coin-lime coin-ring float absolute right-[14%] top-[18%] h-14 w-14 opacity-70">
           N
         </div>
@@ -26,7 +28,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-sm">
-          <div className="glass hero-card fade-up p-8">
+          <div className="glass hero-card sheen fade-up p-8">
             <div className="flex items-center gap-3">
               <div className="coin coin-lime coin-ring h-10 w-10 text-base">N</div>
               <div className="text-2xl font-bold tracking-tight">

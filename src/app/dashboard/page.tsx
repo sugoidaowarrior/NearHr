@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GlassRing } from "@/components/GlassRing";
 
 /* ── types ──────────────────────────────────────────────────────────── */
 type User = { id: string; email: string; name: string | null; avatar: string | null; role: string };
@@ -168,7 +169,7 @@ function OverviewChart({ points, loading }: { points: ChartPoint[]; loading: boo
             <g key={i}>
               <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke="var(--line-soft)" />
               <text x={P.l - 8} y={yy + 3} textAnchor="end" fill="var(--muted-2)" fontSize="10">
-                {v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0)}
+                {v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v >= 10 ? v.toFixed(0) : v.toFixed(1)}
               </text>
             </g>
           );
@@ -533,7 +534,7 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen overflow-x-clip pb-16">
       <div className="aurora" />
-      <div className="ring-hero" aria-hidden />
+      <GlassRing />
 
       {/* top bar */}
       <header className="sticky top-0 z-30 border-b border-[var(--line-soft)] bg-[var(--background)]/70 backdrop-blur-xl">
@@ -570,7 +571,7 @@ export default function Dashboard() {
       <div className="mx-auto max-w-[1280px] px-5 pt-6 md:px-8">
         {/* hero */}
         <section className="fade-up mb-5 grid gap-4 lg:grid-cols-12">
-          <div className="glow glass hero-card relative overflow-hidden p-6 lg:col-span-8">
+          <div className="glow glass sheen hero-card relative overflow-hidden p-6 lg:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="eyebrow">Portfolio value</div>
