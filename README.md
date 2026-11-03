@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HushPay
 
-## Getting Started
+Private payroll on NEAR — a simple, custodial smart-account wallet.
+Log in with Google, back up with a second email, and pay up to 50 people per
+run in NEAR or USDC, with optional privacy in three levels.
 
-First, run the development server:
+**Status: MVP.** Everything up to the final on-chain signature is built and
+tested offline (see [Verified](#verified)). Google OAuth and real NEAR
+transfers are wired end-to-end but need your credentials + a funded account
+to exercise for the first time.
+
+## What it is
+
+- **Custodial smart account** — one NEAR account per employer, backed by a
+  server-held ed25519 master key. No wallet software for employees.
+- **Google (Gmail) login** — hand-rolled OAuth2 + PKCE, no NextAuth.
+- **Backup** — the encrypted key vault is wrapped in a backup bundle you send
+  to a second email. Bundle + passphrase = full recovery.
+- **Payroll** — CSV import → validate → preview → run. Max **50 employees**
+  per run, in **NEAR or USDC (nep141)**.
+- **Optional privacy, three levels** (SIP Protocol NEAR stealth):
+  - `transparent` — straight transfer to the employee's NEAR account. Public.
+  - `shielded` — each payment funds a one-time stealth implicit account; only
+    the employee can claim it. Payer-to-recipient is not linked on-chain.
+  - `compliant` — shielded, plus a viewing key so an auditor can verify every
+    payment was made without exposing who received it.
+
+## Quickstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # fill in GOOGLE_CLIENT_ID / _SECRET, NEAR_NETWORK
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Google Cloud Console: create an OAuth client (Web) with authorized redirect
+URI `http://localhost:3000/api/auth/google/callback`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Your employer account: log in with the Gmail listed in `EMPLOYER_EMAILS`
+(comma-separated) — the first login grants the `employer` role. Everyone else
+is an `employee` (read + claim, no payroll controls).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Test without Google: `npx tsx scripts/e2e-seed.mjs` creates a test employer
+and prints a session token; use it as the `hp_session` cookie (this is how
+the offline flow below was verified).
 
-## Learn More
+### CSV format
 
-To learn more about Next.js, take a look at the following resources:
+```csv
+email,name,amount,near_account,stealth_meta,privacy
+jane@x.com,Jane,1500,jane.testnet,,
+joe@x.com,Joe,250.5,,sip:near:0x...:0x...,shielded
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `transparent` rows need `near_account`; `shielded`/`compliant` rows need
+  `stealth_meta` (the employee's `sip:near:...` meta address).
+- Per-row `privacy` overrides the run default. Duplicate emails, bad
+  amounts, and >50 rows are rejected with line-level errors.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Scripts
 
-## Deploy on Vercel
+| Command | Purpose |
+|---|---|
+| `npm run dev` / `npm run build && npm start` | Run / build the app |
+| `npx tsc --noEmit` | Type-check |
+| `npx tsx scripts/smoke.mjs` | Offline test: vault crypto, SIP stealth round-trip, CSV parser, NEAR/USDC math |
+| `npx tsx scripts/e2e-seed.mjs` | Seed a test employer + session token for the API |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## How keys are held
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+data/kms.key            server master key (auto-generated, mode 0600, gitignored)
+data/hushpay.db         SQLite: users, sessions, vaults, payroll runs/items
+```
+
+Per-employer vault = AES-256-GCM envelope:
+
+1. Fresh random DEK encrypts the key material (NEAR master key + SIP
+   spending/viewing keys + account id).
+2. The DEK is wrapped with `SHA-256(PBKDF2(passphrase) ‖ KMS key)` — so the
+   ciphertext is useless without **both** your passphrase and the server's KMS key.
+3. The same ciphertext is the backup bundle. Restore = bundle + passphrase.
+
+The passphrase never leaves your browser except inside the unlock/execute
+requests. SQLite columns for money are `TEXT` (decimal strings) — 1 NEAR =
+10²⁴ yocto overflows `INTEGER`/REAL and would silently corrupt amounts.
+
+## Verified
+
+- `npx tsc --noEmit` — clean
+- `npx tsx scripts/smoke.mjs` — 22/22 (vault round-trip, wrong-passphrase
+  rejection, backup bundle decode, stealth create/derive/claim + non-claim by
+  other employee, CSV validation incl. duplicate + 50-cap, NEAR/USDC math)
+- `npx next build` — clean (18 routes)
+- Live server, real HTTP: landing/login/dashboard render; unauthed APIs →
+  401; vault create → 201 with encrypted record; backup record + re-download;
+  payroll preview → 2/2 valid; run create → 201; run list/detail → exact
+  decimal amounts; 51 rows → 400; unconfigured Google → actionable 400.
+
+**Not yet exercised** (needs real external state): the Google consent
+round-trip (no client id configured) and actual on-chain transfers (no
+funded account / `NEAR_NETWORK` endpoint). The execution path — signing,
+nonce-ordered sequential sends, stealth funding, claim — is implemented in
+`src/lib/near.ts` / `src/lib/payroll.ts` / `src/lib/privacy.ts` and
+type-checked, but treat it as unverified until one real testnet run.
+
+## Honest risk notes (read before going live)
+
+1. **Custodial by design.** We hold the keys (encrypted). If the server is
+   fully compromised — KMS key + passphrase — funds move. MVP trade-off for
+   simplicity; a self-custodial upgrade is the next milestone.
+2. **Stealth ≠ full shield.** In `shielded`/`compliant` the *sender* account
+   is still visible on-chain; what's hidden is the link to the employee and
+   the recipient address. Full ZK shielded-pool privacy on NEAR routes
+   through Intents — a centralized rail whose compliance layer has paused
+   funds before (July and October 2026). The MVP deliberately stays on-chain
+   so your funds are never held by a third party.
+3. **Backup = your safety.** Lose passphrase **and** KMS key and the vault
+   is unrecoverable. Treat the backup bundle like the master key itself.
+
+## Layout
+
+```
+src/lib/        crypto · db · near · privacy · vault · google · sessions · payroll
+src/app/api/    auth/google/{start,callback} · logout · me · vault(+backup/claim/restore) ·
+                payroll(+preview/runs/[id]/[id]/execute) · balance
+src/app/        page (landing) · login · dashboard (Wallet / New payroll / Runs / Backup)
+scripts/        smoke.mjs (offline) · e2e-seed.mjs (test session)
+```
