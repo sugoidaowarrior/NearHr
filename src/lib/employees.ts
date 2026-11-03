@@ -9,6 +9,11 @@ import { getDb } from "./db";
 
 export type EmployeeFrequency = "monthly" | "biweekly" | "weekly";
 
+/** Privacy levels for the team directory (SIP Protocol stealth addresses). */
+export type PrivacyLevel = "transparent" | "shielded" | "compliant";
+
+export const PRIVACY_LEVELS: readonly PrivacyLevel[] = ["transparent", "shielded", "compliant"];
+
 const FREQ: readonly string[] = ["monthly", "biweekly", "weekly"];
 
 /** NEAR account id: lower alpha numeric plus dot and dash, no leading dot. */
@@ -25,6 +30,7 @@ export interface EmployeeInput {
   frequency?: EmployeeFrequency;
   payDay?: number | null;
   status?: "active" | "offboarded";
+  privacy?: PrivacyLevel;
 }
 
 export interface Employee {
@@ -39,6 +45,7 @@ export interface Employee {
   frequency: string;
   payDay: number | null;
   status: string;
+  privacy: PrivacyLevel;
   createdAt: string;
   updatedAt: string;
   lastPaidAt: string | null;
@@ -59,6 +66,7 @@ type Row = {
   frequency: string;
   pay_day: number | null;
   status: string;
+  privacy: string;
   created_at: string;
   updated_at: string;
   last_paid_at: string | null;
@@ -89,6 +97,8 @@ function validate(input: Partial<EmployeeInput>, { partial = false }: { partial?
     out.push("frequency must be monthly, biweekly or weekly");
   if (input.status !== undefined && !["active", "offboarded"].includes(input.status))
     out.push("status must be active or offboarded");
+  if (input.privacy !== undefined && !(PRIVACY_LEVELS as string[]).includes(input.privacy))
+    out.push("privacy must be transparent, shielded or compliant");
   if (input.payDay !== undefined && input.payDay !== null) {
     const d = Number(input.payDay);
     if (!Number.isInteger(d) || d < 1 || d > 28) out.push("pay day must be an integer from 1 to 28");
@@ -132,6 +142,9 @@ export function listEmployees(employerId: string): Employee[] {
     frequency: r.frequency,
     payDay: r.pay_day,
     status: r.status,
+    privacy: (PRIVACY_LEVELS as readonly string[]).includes(r.privacy)
+      ? (r.privacy as PrivacyLevel)
+      : "transparent",
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     lastPaidAt: r.last_paid_at,
@@ -148,8 +161,8 @@ export function addEmployee(employerId: string, input: EmployeeInput): Employee 
   const id = randomUUID();
   db.prepare(
     `INSERT INTO employees
-      (id, employer_id, name, email, department, job_title, wallet, asset, salary, frequency, pay_day, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (id, employer_id, name, email, department, job_title, wallet, asset, salary, frequency, pay_day, status, privacy)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     employerId,
@@ -162,7 +175,8 @@ export function addEmployee(employerId: string, input: EmployeeInput): Employee 
     String(input.salary ?? "0"),
     input.frequency ?? "monthly",
     input.payDay ?? null,
-    input.status ?? "active"
+    input.status ?? "active",
+    input.privacy ?? "transparent"
   );
   const one = listEmployees(employerId).find((e) => e.id === id);
   if (!one) throw new Error("employee vanished after insert");
@@ -194,6 +208,7 @@ export function updateEmployee(employerId: string, id: string, input: Partial<Em
   if (input.frequency !== undefined) put("frequency", input.frequency);
   if (input.payDay !== undefined) put("pay_day", input.payDay);
   if (input.status !== undefined) put("status", input.status);
+  if (input.privacy !== undefined) put("privacy", input.privacy);
   if (sets.length === 0) return listEmployees(employerId).find((e) => e.id === id)!;
   sets.push("updated_at = datetime('now')");
   args.push(id, employerId);
@@ -207,6 +222,29 @@ export function deleteEmployee(employerId: string, id: string): void {
   const db = getDb();
   const res = db.prepare("DELETE FROM employees WHERE id = ? AND employer_id = ?").run(id, employerId);
   if (res.changes === 0) throw new Error("employee not found");
+}
+
+/**
+ * Upgrade an employee's privacy level in place (compliant outranks shielded
+ * which outranks transparent). Used when a payroll run pays out via a stealth
+ * address, so the team directory reflects how the person was actually paid.
+ */
+export function bumpPrivacy(employerId: string, employeeId: string, level: PrivacyLevel): void {
+  const rank: Record<PrivacyLevel, number> = { transparent: 0, shielded: 1, compliant: 2 };
+  const db = getDb();
+  const owned = db
+    .prepare("SELECT id, privacy FROM employees WHERE id = ? AND employer_id = ?")
+    .get(employeeId, employerId) as { id: string; privacy: string } | undefined;
+  if (!owned) return;
+  const current = (PRIVACY_LEVELS as readonly string[]).includes(owned.privacy)
+    ? (owned.privacy as PrivacyLevel)
+    : "transparent";
+  if (rank[level] > rank[current]) {
+    db.prepare("UPDATE employees SET privacy = ?, updated_at = datetime('now') WHERE id = ?").run(
+      level,
+      employeeId
+    );
+  }
 }
 
 /** Find an employee by wallet or email for an employer (used to link payments). */

@@ -28,7 +28,7 @@ import {
   defaultNearConfig,
 } from "./near";
 import { recordPayment, fromBase } from "./payments";
-import { findEmployee } from "./employees";
+import { findEmployee, bumpPrivacy } from "./employees";
 
 export const MAX_EMPLOYEES_PER_RUN = 50;
 
@@ -346,6 +346,9 @@ export async function executeRun(
           email,
           wallet: privacy === "transparent" ? dest : undefined,
         });
+        // keep the team directory privacy label in sync with how this person
+        // was actually paid (stealth payout upgrades the level in place)
+        if (empId) bumpPrivacy(employerId, empId, privacy);
         recordPayment({
           employerId,
           employeeId: empId,

@@ -25,6 +25,8 @@ export interface VaultView {
   createdAt: string;
   /** True if the vault was created by the old passphrase flow (can't auto-unlock). */
   legacy?: boolean;
+  /** SIP Protocol viewing key: read only, lets an auditor decrypt stealth payouts. */
+  viewingKey?: string | null;
 }
 
 /**
@@ -207,6 +209,19 @@ export function getVaultView(userId: string): VaultView | null {
     }
     legacyCache.set(userId, legacy);
   }
+  // Reading the viewing key costs one decryption (same cost as the legacy
+  // check above); only attempt it for non legacy vaults.
+  let viewingKey: string | null = null;
+  if (!legacy) {
+    try {
+      const plain = decryptVault(row.record, serverKekFor(userId)) as {
+        sipViewingKey?: string;
+      };
+      viewingKey = plain.sipViewingKey ?? null;
+    } catch {
+      viewingKey = null;
+    }
+  }
   return {
     userId,
     nearAccount: row.near_account,
@@ -215,6 +230,7 @@ export function getVaultView(userId: string): VaultView | null {
     backupSentAt: row.backup_sent_at,
     createdAt: row.created_at,
     legacy,
+    viewingKey,
   };
 }
 

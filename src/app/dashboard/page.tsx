@@ -33,6 +33,7 @@ type Employee = {
   frequency: string;
   payDay: number | null;
   status: string;
+  privacy?: string;
   lastPaidAt: string | null;
   lastPaidAmount: string | null;
   lastPaidAsset: string | null;
@@ -143,6 +144,22 @@ const usd = (n: number) =>
 const ngn = (n: number) =>
   "₦" + Math.round(n).toLocaleString("en-NG");
 const shortAddr = (a: string) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || "…");
+const nameInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
+
+/** Privacy levels shown in the team directory. Ring + label colours. */
+const PRIVACY_META: Record<string, { label: string; color: string; pill: string }> = {
+  transparent: { label: "transparent", color: "#4ade80", pill: "pill-green" },
+  shielded: { label: "shielded", color: "#60a5fa", pill: "pill-blue" },
+  compliant: { label: "compliant", color: "#d580d0", pill: "pill-magenta" },
+};
+const privacyMeta = (p?: string) => PRIVACY_META[p ?? "transparent"] ?? PRIVACY_META.transparent;
 const fmtDate = (s: string | null) => {
   if (!s) return "never";
   const d = new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z");
@@ -495,6 +512,8 @@ export default function Dashboard() {
   const [swapOpen, setSwapOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [empPrivacy, setEmpPrivacy] = useState<"all" | "transparent" | "shielded" | "compliant">("all");
+  const [vaultAccount, setVaultAccount] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -512,13 +531,14 @@ export default function Dashboard() {
       const me = await api("/api/me");
       setUser(me.user);
       // Every user is an HR operator of their own workspace.
-      const [pf, emps, pay, sch, runRes, sal] = await Promise.all([
+      const [pf, emps, pay, sch, runRes, sal, vlt] = await Promise.all([
         api("/api/portfolio").catch(() => null),
         api("/api/employees").catch(() => ({ employees: [] })),
         api("/api/payments").catch(() => ({ payments: [] })),
         api("/api/schedule").catch(() => null),
         api("/api/payroll/runs").catch(() => ({ runs: [] })),
         api("/api/payroll/summary").catch(() => null),
+        api("/api/vault").catch(() => null),
       ]);
       if (pf) {
         setPrices(pf.prices);
@@ -530,6 +550,7 @@ export default function Dashboard() {
       setSchedule(sch?.schedule ?? null);
       setRuns(runRes.runs);
       setSalary(sal ?? null);
+      setVaultAccount(vlt?.vault?.nearAccount ?? null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "unauthorized") router.replace("/login");
@@ -764,11 +785,14 @@ export default function Dashboard() {
   const usdcAmt = balance ? Number(balance.usdc.human) : 0;
   const spark = (i: number, k = 26) =>
     Array.from({ length: k }, (_, j) => 50 + 32 * seeded(i * 131 + j * 7) + 14 * Math.sin(j / 2.1 + i));
-  const filteredEmps = query
-    ? employees.filter((e) =>
-        [e.name, e.email ?? "", e.department ?? "", e.wallet, e.jobTitle ?? ""].join(" ").toLowerCase().includes(query.toLowerCase())
-      )
-    : employees;
+  const filteredEmps = employees.filter((e) => {
+    if (empPrivacy !== "all" && (e.privacy ?? "transparent") !== empPrivacy) return false;
+    if (!query) return true;
+    return [e.name, e.email ?? "", e.department ?? "", e.wallet, e.jobTitle ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(query.toLowerCase());
+  });
 
   return (
     <main className="min-h-screen overflow-x-clip pb-16">
@@ -1135,96 +1159,174 @@ export default function Dashboard() {
         {/* employees + payroll */}
         {isEmployer && (
           <section className="mb-5 grid gap-4 lg:grid-cols-12">
-            <div className="glass fade-up d3 p-5 lg:col-span-7">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="section-title">
-                  Employees <span className="pill pill-muted">{employees.length}</span>
+            <div className="glass fade-up d3 flex flex-col p-5 lg:col-span-7">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold tracking-tight">Team directory</h3>
+                  <p className="mt-0.5 text-xs text-[var(--color-faint)]">
+                    {employees.length} {employees.length === 1 ? "person" : "people"}
+                    {" · "}3 privacy levels
+                  </p>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setEmpModal({ editing: null })}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Add employee
-                </button>
-              </div>
-
-              {filteredEmps.length === 0 ? (
-                <div className="grid place-items-center border border-dashed border-[var(--color-rule)] py-12 text-center">
-                  <div>
-                    <div className="mb-2 mono text-[11px] tracking-widest text-[var(--color-faint)]">DIRECTORY</div>
-                    <p className="text-sm text-[var(--color-muted)]">
-                      {employees.length === 0
-                        ? "No employees yet. Add your first person to track who to pay."
-                        : "No employees match your search."}
-                    </p>
+                <div className="flex flex-none flex-col items-end gap-2.5">
+                  <button className="btn btn-primary btn-sm" onClick={() => setEmpModal({ editing: null })}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Add person
+                  </button>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {(["all", "transparent", "shielded", "compliant"] as const).map((lvl) => {
+                      const count =
+                        lvl === "all"
+                          ? employees.length
+                          : employees.filter((e) => (e.privacy ?? "transparent") === lvl).length;
+                      const active = empPrivacy === lvl;
+                      const c =
+                        lvl === "all"
+                          ? "#4d65ff"
+                          : lvl === "transparent"
+                            ? "#4ade80"
+                            : lvl === "shielded"
+                              ? "#60a5fa"
+                              : "#d580d0";
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => setEmpPrivacy(lvl)}
+                          aria-pressed={active}
+                          className="tfilter"
+                          style={
+                            active && c
+                              ? {
+                                  borderColor: `color-mix(in srgb, ${c} 55%, transparent)`,
+                                  background: `color-mix(in srgb, ${c} 12%, transparent)`,
+                                  color: "var(--color-ink)",
+                                }
+                              : undefined
+                          }
+                        >
+                          {lvl}
+                          <span
+                            className="mono"
+                            style={active && c ? { color: c } : undefined}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              ) : (
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Employee</th>
-                        <th>Department</th>
-                        <th>Wallet</th>
-                        <th>Salary</th>
-                        <th>Last paid</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredEmps.map((e, i) => (
-                        <tr key={e.id}>
-                          <td>
-                            <div className="flex items-center gap-3">
-                              <span className="entry-n w-6">{String(i + 1).padStart(2, "0")}</span>
-                              <div>
-                                <div className="font-semibold">{e.name}</div>
-                                <div className="text-xs text-[var(--color-faint)]">{e.jobTitle || e.email || "no contact"}</div>
-                              </div>
+              </div>
+
+              <div className="mt-4 flex-1">
+                {filteredEmps.length === 0 ? (
+                  <div className="grid h-full min-h-[220px] place-items-center border border-dashed border-[var(--color-rule)] px-6 text-center">
+                    <div>
+                      <div className="mb-2 mono text-[11px] tracking-widest text-[var(--color-faint)]">DIRECTORY</div>
+                      <p className="text-sm text-[var(--color-muted)]">
+                        {employees.length === 0
+                          ? "No people yet. Add your first team member to start tracking paydays."
+                          : "No one matches this filter yet."}
+                      </p>
+                      {employees.length === 0 && (
+                        <button className="btn btn-ghost btn-sm mt-4" onClick={() => setEmpModal({ editing: null })}>
+                          Add the first person
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+                    {filteredEmps.map((e) => {
+                      const meta = privacyMeta(e.privacy);
+                      return (
+                        <div key={e.id} className="member-card" title={`${e.name} · ${meta.label} privacy`}>
+                          <div className="flex items-start justify-between gap-1">
+                            <div
+                              className="member-ring flex-none"
+                              style={{ boxShadow: `0 0 0 2px ${meta.color}`, color: meta.color }}
+                            >
+                              <span className="text-[15px] font-extrabold">{nameInitials(e.name)}</span>
                             </div>
-                          </td>
-                          <td>
-                            <span className="pill pill-muted">{e.department || "general"}</span>
-                          </td>
-                          <td>
-                            <span className="mono text-xs">{shortAddr(e.wallet)}</span>
-                          </td>
-                          <td className="mono">
-                            {e.salary} <span className="text-[var(--color-faint)]">{e.asset}</span>
-                          </td>
-                          <td>
+                            <span className="h-2 w-2 flex-none rounded-full" style={{ background: meta.color }} />
+                          </div>
+                          <div className="mt-2.5 min-w-0">
+                            <div className="truncate text-[13px] font-semibold">{e.name}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-[var(--color-faint)]">
+                              {e.jobTitle || e.department || "team member"}
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-1 border-t border-[var(--color-rule)] pt-2.5">
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+                              {e.lastPaidAt ? `last paid ${fmtDate(e.lastPaidAt)}` : "not paid yet"}
+                            </span>
                             {e.lastPaidAt ? (
-                              <div>
-                                <div className="text-xs font-medium">{fmtDate(e.lastPaidAt)}</div>
-                                <div className="mono text-[11px] text-[var(--color-faint)]">
-                                  {e.lastPaidAmount} {e.lastPaidAsset} · {e.timesPaid}× paid
-                                </div>
-                              </div>
+                              <span className="mono text-[11px] text-[var(--color-muted)]">
+                                {e.timesPaid}
+                                <span className="text-[var(--color-faint)]">×</span>
+                              </span>
                             ) : (
-                              <span className="pill pill-warn">not paid yet</span>
+                              <span className="pill pill-warn" style={{ padding: "2px 7px", fontSize: 9 }}>
+                                new
+                              </span>
                             )}
-                          </td>
-                          <td>
-                            <div className="flex items-center gap-1">
-                              <button className="icon-btn" style={{ width: 30, height: 30 }} onClick={() => setEmpModal({ editing: e })} title="Edit">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-                                </svg>
-                              </button>
-                              <button className="icon-btn" style={{ width: 30, height: 30 }} onClick={() => deleteEmployee(e.id)} title="Delete">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: "3px 9px", fontSize: 11 }}
+                              onClick={() => setEmpModal({ editing: e })}
+                            >
+                              Edit
+                            </button>
+                            <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => deleteEmployee(e.id)} title="Remove from directory">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="card-2 mt-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-9 w-9 flex-none place-items-center rounded-lg border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
+                      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+                      <path d="M9 12l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-semibold">Audit viewing key</div>
+                    <div className="mt-0.5 text-[11px] leading-snug text-[var(--color-faint)]">
+                      A read only key lets any auditor verify stealth payouts on chain. It never exposes funds.
+                    </div>
+                  </div>
                 </div>
-              )}
+                <div className="flex flex-none items-center gap-2">
+                  <span className="mono max-w-[220px] truncate text-[11px] text-[var(--color-muted)]">
+                    {vaultAccount ? shortAddr(vaultAccount) : "no vault yet"}
+                  </span>
+                  {vaultAccount && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ padding: "3px 10px" }}
+                      onClick={() => {
+                        navigator.clipboard?.writeText(vaultAccount);
+                        notify("ok", "viewing account copied");
+                      }}
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="glass fade-up d4 flex flex-col p-5 lg:col-span-5">
@@ -1683,6 +1785,7 @@ function EmployeeModal({
     frequency: employee?.frequency ?? "monthly",
     payDay: employee?.payDay ?? 28,
     status: employee?.status ?? "active",
+    privacy: employee?.privacy ?? "transparent",
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
@@ -1700,6 +1803,7 @@ function EmployeeModal({
       frequency: f.frequency as Employee["frequency"],
       payDay: Number(f.payDay) || null,
       status: f.status as Employee["status"],
+      privacy: f.privacy as Employee["privacy"],
     });
     setBusy(false);
     if (ok) onClose();
@@ -1752,6 +1856,13 @@ function EmployeeModal({
           <select className="input" value={f.status} onChange={(e) => set("status", e.target.value)}>
             <option value="active">active</option>
             <option value="offboarded">offboarded</option>
+          </select>
+        </Field>
+        <Field label="Privacy level">
+          <select className="input" value={f.privacy} onChange={(e) => set("privacy", e.target.value)}>
+            <option value="transparent">transparent · pays to a visible wallet</option>
+            <option value="shielded">shielded · one time stealth address</option>
+            <option value="compliant">compliant · stealth plus audit trail</option>
           </select>
         </Field>
       </div>

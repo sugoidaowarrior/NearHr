@@ -169,6 +169,16 @@ export function initDb(): void {
     }
     db.prepare("PRAGMA user_version = 3").run();
   }
+  if (ver < 4) {
+    // Per employee privacy level (transparent, shielded, compliant) for the
+    // team directory. Defaults to transparent; payroll runs upgrade it when a
+    // shielded or compliant payout is actually made for that person.
+    const empCols = db.prepare("PRAGMA table_info(employees)").all() as { name: string }[];
+    if (!empCols.some((c) => c.name === "privacy")) {
+      db.exec("ALTER TABLE employees ADD COLUMN privacy TEXT NOT NULL DEFAULT 'transparent'");
+    }
+    db.prepare("PRAGMA user_version = 4").run();
+  }
   const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
     name: string;
     type: string;
