@@ -1,0 +1,73 @@
+<svg viewBox="0 0 520 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Payout ledger card showing recent payroll entries">
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4d65ff"/>
+      <stop offset="100%" stop-color="#0082f3"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1d2230"/>
+      <stop offset="100%" stop-color="#10131b"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="16"/></filter>
+  </defs>
+  <rect width="520" height="600" fill="#080a0f"/>
+  <ellipse cx="260" cy="300" rx="260" ry="300" fill="#4d65ff" opacity="0.12" filter="url(#soft)"/>
+
+  <g transform="translate(60 70)" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <!-- ledger card -->
+    <rect width="400" height="460" rx="22" fill="url(#card)" stroke="#e9edef" stroke-opacity="0.1"/>
+    <rect width="400" height="6" rx="3" fill="url(#blue)"/>
+
+    <text x="28" y="52" fill="#e9edef" font-size="20" font-weight="700">Payout ledger</text>
+    <text x="28" y="74" fill="#758696" font-size="13">October payroll · 50 paid</text>
+    <g>
+      <rect x="312" y="34" width="60" height="26" rx="13" fill="#0c1610" stroke="#22c07a" stroke-opacity="0.4"/>
+      <circle cx="328" cy="47" r="4" fill="#22c07a"/>
+      <text x="338" y="51" fill="#22c07a" font-size="11" font-weight="700">live</text>
+    </g>
+
+    <!-- row -->
+    <g transform="translate(28 104)">
+      <circle cx="20" cy="20" r="18" fill="#161b27" stroke="#e9edef" stroke-opacity="0.14"/>
+      <text x="20" y="26" fill="#e9edef" font-size="15" font-weight="700" text-anchor="middle">A</text>
+      <text x="52" y="17" fill="#e9edef" font-size="15" font-weight="600">Ada Okoye</text>
+      <text x="52" y="35" fill="#758696" font-size="11">ada.near · engineering</text>
+      <text x="344" y="20" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">1,500</text>
+      <text x="344" y="36" fill="#4d65ff" font-size="11" text-anchor="end">NEAR</text>
+      <line x1="0" y1="52" x2="344" y2="52" stroke="#e9edef" stroke-opacity="0.06"/>
+    </g>
+
+    <g transform="translate(28 180)">
+      <circle cx="20" cy="20" r="18" fill="#161b27" stroke="#e9edef" stroke-opacity="0.14"/>
+      <text x="20" y="26" fill="#e9edef" font-size="15" font-weight="700" text-anchor="middle">M</text>
+      <text x="52" y="17" fill="#e9edef" font-size="15" font-weight="600">Marcus Bell</text>
+      <text x="52" y="35" fill="#758696" font-size="11">0x…8f2a · product</text>
+      <text x="344" y="20" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">2,400</text>
+      <text x="344" y="36" fill="#0082f3" font-size="11" text-anchor="end">USDC</text>
+      <line x1="0" y1="52" x2="344" y2="52" stroke="#e9edef" stroke-opacity="0.06"/>
+    </g>
+
+    <g transform="translate(28 256)">
+      <circle cx="20" cy="20" r="18" fill="#161b27" stroke="#e9edef" stroke-opacity="0.14"/>
+      <text x="20" y="26" fill="#e9edef" font-size="15" font-weight="700" text-anchor="middle">P</text>
+      <text x="52" y="17" fill="#e9edef" font-size="15" font-weight="600">Priya Nair</text>
+      <text x="52" y="35" fill="#758696" font-size="11">priya.near · design</text>
+      <text x="344" y="20" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">1,200</text>
+      <text x="344" y="36" fill="#4d65ff" font-size="11" text-anchor="end">NEAR</text>
+      <line x1="0" y1="52" x2="344" y2="52" stroke="#e9edef" stroke-opacity="0.06"/>
+    </g>
+
+    <g transform="translate(28 332)">
+      <circle cx="20" cy="20" r="18" fill="#161b27" stroke="#e9edef" stroke-opacity="0.14"/>
+      <text x="20" y="26" fill="#e9edef" font-size="15" font-weight="700" text-anchor="middle">J</text>
+      <text x="52" y="17" fill="#e9edef" font-size="15" font-weight="600">Jonah Reyes</text>
+      <text x="52" y="35" fill="#758696" font-size="11">jonah.near · ops</text>
+      <text x="344" y="20" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">980</text>
+      <text x="344" y="36" fill="#0082f3" font-size="11" text-anchor="end">USDC</text>
+    </g>
+
+    <rect x="28" y="404" width="344" height="34" rx="10" fill="#0c0f16" stroke="#4d65ff" stroke-opacity="0.3"/>
+    <text x="44" y="426" fill="#758696" font-size="12">Total paid this run</text>
+    <text x="356" y="426" fill="#e9edef" font-size="14" font-weight="700" text-anchor="end">6,080 NEAR</text>
+  </g>
+</svg>

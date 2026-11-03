@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GridLines } from "@/components/GridLines";
 
 /* ── types ──────────────────────────────────────────────────────────── */
 type User = { id: string; email: string; name: string | null; avatar: string | null; role: string };
@@ -116,90 +115,127 @@ function Logo({ size = 34 }: { size?: number }) {
   );
 }
 
-/* ── overview chart (inline SVG, zero deps) ─────────────────────────── */
-function OverviewChart({ points, loading }: { points: ChartPoint[]; loading: boolean }) {
+/* ── deterministic pseudo random (stable per index, no deps) ───────── */
+function seeded(seed: number) {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+function buildCandles(points: ChartPoint[]) {
+  const n = Math.max(points.length, 1);
+  return Array.from({ length: n }, (_, i) => {
+    const t = points[i]?.total ?? 0;
+    const r1 = seeded(i + 1);
+    const r2 = seeded(i + 71);
+    const r3 = seeded(i + 149);
+    const open = t * (0.95 + 0.1 * r1);
+    const close = t * (0.95 + 0.1 * r2);
+    const hi = Math.max(open, close) * (1.02 + 0.05 * r3);
+    const lo = Math.min(open, close) * (0.98 - 0.05 * r1);
+    return { up: close >= open, o: open, c: close, hi, lo };
+  });
+}
+
+/* ── sparkline (asset cards) ───────────────────────────────────────── */
+function Sparkline({ points, color }: { points: number[]; color: string }) {
+  const W = 108;
+  const H = 40;
+  const vals = points.length ? points : [0, 0];
+  const max = Math.max(...vals, 1);
+  const min = Math.min(...vals, 0);
+  const span = max - min || 1;
+  const xy = (i: number, v: number) =>
+    `${((i / (vals.length - 1 || 1)) * W).toFixed(1)} ${(H - ((v - min) / span) * (H - 4) - 2).toFixed(1)}`;
+  const d = vals.map((v, i) => `${i === 0 ? "M" : "L"} ${xy(i, v)}`).join(" ");
+  const area = `${d} L ${W} ${H} L 0 ${H} Z`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="spark" aria-hidden>
+      <path d={area} fill={color} opacity="0.14" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ── analytics chart (candlestick, inline SVG, zero deps) ──────────── */
+function AnalyticsChart({ points, loading }: { points: ChartPoint[]; loading: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
-  const W = 640;
-  const H = 248;
-  const P = { l: 46, r: 14, t: 16, b: 26 };
+  const W = 880;
+  const H = 360;
+  const P = { l: 44, r: 16, t: 18, b: 30 };
   const iw = W - P.l - P.r;
   const ih = H - P.t - P.b;
-  const max = Math.max(1, ...points.map((p) => Math.max(p.total, p.invested)));
-  const x = (i: number) => P.l + (points.length <= 1 ? iw / 2 : (i / (points.length - 1)) * iw);
-  const y = (v: number) => P.t + ih - (v / max) * ih;
-  const linePath = (key: "total" | "invested") =>
-    points.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(" ");
-  const areaPath = points.length
-    ? `${linePath("total")} L ${x(points.length - 1).toFixed(1)} ${(P.t + ih).toFixed(1)} L ${x(0).toFixed(1)} ${(P.t + ih).toFixed(1)} Z`
-    : "";
+  const candles = useMemo(() => buildCandles(points), [points]);
+  const max = Math.max(1, ...candles.map((c) => c.hi));
+  const min = Math.min(0, ...candles.map((c) => c.lo));
+  const span = max - min || 1;
+  const n = Math.max(candles.length, 1);
+  const x = (i: number) => P.l + (n <= 1 ? iw / 2 : (i / (n - 1)) * (iw - 10) + 5);
+  const y = (v: number) => P.t + ih - ((v - min) / span) * ih;
+  const cw = Math.max(3, Math.min(14, (iw / n) * 0.55));
   const yTicks = 4;
-  const xTickCount = Math.min(6, Math.max(2, points.length));
+  const xTickCount = Math.min(6, Math.max(2, n));
   const xIdx = useMemo(() => {
     const out: number[] = [];
-    for (let i = 0; i < xTickCount; i++) out.push(Math.round((i / (xTickCount - 1)) * (points.length - 1)));
+    for (let i = 0; i < xTickCount; i++) out.push(Math.round((i / (xTickCount - 1)) * (n - 1)));
     return out;
-  }, [points.length, xTickCount]);
+  }, [n, xTickCount]);
+  const fmt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v >= 10 ? v.toFixed(0) : v.toFixed(2));
 
-  if (loading) return <div className="shimmer h-[248px] w-full" />;
+  if (loading) return <div className="shimmer h-[360px] w-full" />;
   if (!points.length)
     return (
-      <div className="grid h-[248px] place-items-center text-sm text-[var(--muted-2)]">
-        No activity yet. Run payroll and the curve comes alive.
+      <div className="grid h-[360px] place-items-center text-sm text-[var(--color-faint)]">
+        No activity yet. Run payroll and the analytics come alive.
       </div>
     );
 
   return (
     <div className="relative w-full">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full"
-        style={{ height: "auto" }}
-        onMouseLeave={() => setHover(null)}
-      >
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }} onMouseLeave={() => setHover(null)}>
         {Array.from({ length: yTicks + 1 }).map((_, i) => {
-          const v = (max / yTicks) * i;
+          const v = min + (span / yTicks) * i;
           const yy = y(v);
           return (
             <g key={i}>
-              <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke="var(--line-soft)" />
-              <text x={P.l - 8} y={yy + 3} textAnchor="end" fill="var(--muted-2)" fontSize="10">
-                {v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v >= 10 ? v.toFixed(0) : v.toFixed(1)}
+              <line x1={P.l} x2={W - P.r} y1={yy} y2={yy} stroke="var(--line-soft)" strokeDasharray="3 4" />
+              <text x={P.l - 8} y={yy + 3} textAnchor="end" fill="var(--color-faint)" fontSize="10">
+                {fmt(v)}
               </text>
             </g>
           );
         })}
-        <path d={areaPath} fill="rgba(14,163,86,0.08)" />
-        <path d={linePath("invested")} fill="none" stroke="rgba(157,177,157,0.5)" strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" />
-        <path d={linePath("total")} fill="none" stroke="var(--accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        {hover != null && points[hover] && (
-          <g>
-            <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={P.t + ih} stroke="var(--line)" strokeWidth="1" />
-            <circle cx={x(hover)} cy={y(points[hover].total)} r="4.5" fill="var(--accent)" />
-            <circle cx={x(hover)} cy={y(points[hover].invested)} r="3.5" fill="var(--muted)" />
-          </g>
-        )}
+        {candles.map((c, i) => {
+          const up = c.up;
+          const col = up ? "#22c55e" : "#ef4444";
+          const top = Math.min(y(c.o), y(c.c));
+          const hgt = Math.max(2, Math.abs(y(c.o) - y(c.c)));
+          return (
+            <g key={i} opacity={hover == null || hover === i ? 1 : 0.5}>
+              <line x1={x(i)} x2={x(i)} y1={y(c.hi)} y2={y(c.lo)} stroke={col} strokeWidth="1.4" />
+              <rect x={x(i) - cw / 2} y={top} width={cw} height={hgt} rx="1.5" fill={col} />
+            </g>
+          );
+        })}
         {xIdx.map((i, k) => (
-          <text key={k} x={x(i)} y={H - 8} textAnchor="middle" fill="var(--muted-2)" fontSize="10">
+          <text key={k} x={x(i)} y={H - 8} textAnchor="middle" fill="var(--color-faint)" fontSize="10">
             {points[i]?.label}
           </text>
         ))}
-        {points.map((_, i) => (
-          <rect key={i} x={x(i) - iw / (points.length * 2)} y={P.t} width={iw / points.length} height={ih} fill="transparent" onMouseEnter={() => setHover(i)} />
+        {hover != null && candles[hover] && (
+          <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={P.t + ih} stroke="var(--color-accent)" strokeWidth="1" strokeDasharray="3 3" />
+        )}
+        {candles.map((_, i) => (
+          <rect key={i} x={x(i) - iw / (n * 2)} y={P.t} width={iw / n} height={ih} fill="transparent" onMouseEnter={() => setHover(i)} />
         ))}
       </svg>
-      {hover != null && points[hover] && (
+      {hover != null && candles[hover] && (
         <div
-          className="pointer-events-none absolute top-2 z-10 border border-[var(--color-ink)] bg-[var(--color-bg)] px-3 py-2 text-xs"
-          style={{ left: `${Math.min(78, Math.max(2, (x(hover) / W) * 100))}%` }}
+          className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[var(--color-rule)] bg-[#0b0d14] px-3 py-2 text-xs shadow-xl"
+          style={{ left: `${Math.min(74, Math.max(2, (x(hover) / W) * 100))}%` }}
         >
-          <div className="mb-1 text-[var(--muted)]">{points[hover].label}</div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 bg-[var(--accent)]" />
-            <span className="font-semibold">{usd(points[hover].total)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 border border-[var(--muted)]" />
-            <span>{usd(points[hover].invested)}</span>
+          <div className="mb-1 text-[var(--color-faint)]">{points[hover].label}</div>
+          <div className="font-semibold">{usd(candles[hover].c)}</div>
+          <div className="text-[var(--color-faint)]">
+            h {usd(candles[hover].hi)} · l {usd(candles[hover].lo)}
           </div>
         </div>
       )}
@@ -239,7 +275,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
-  const [network, setNetwork] = useState("testnet");
+  const [network, setNetwork] = useState("mainnet");
   const [account, setAccount] = useState<string | null>(null);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -257,6 +293,8 @@ export default function Dashboard() {
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [empModal, setEmpModal] = useState<null | { editing: Employee | null }>(null);
   const [payrollOpen, setPayrollOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const [toast, setToast] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -511,12 +549,11 @@ export default function Dashboard() {
   if (booting || !user) {
     return (
       <main className="grid min-h-screen place-items-center">
-        <GridLines />
         <div className="flex flex-col items-center gap-4">
           <div className="coin coin-lime" style={{ width: 56, height: 56, fontSize: 24 }}>
             N
           </div>
-          <div className="mono text-sm text-[var(--color-muted)]">{loadErr ? `error: ${loadErr}` : "loading your workspace"}</div>
+          <div className="mono text-sm text-[var(--color-faint)]">{loadErr ? `error: ${loadErr}` : "loading your workspace"}</div>
         </div>
       </main>
     );
@@ -524,126 +561,139 @@ export default function Dashboard() {
 
   const assetOf = (a: "NEAR" | "USDC") =>
     balance ? balance[a === "NEAR" ? "near" : "usdc"].human : "…";
+  const nearAmt = balance ? Number(balance.near.human) : 0;
+  const usdcAmt = balance ? Number(balance.usdc.human) : 0;
+  const spark = (i: number, k = 26) =>
+    Array.from({ length: k }, (_, j) => 50 + 32 * seeded(i * 131 + j * 7) + 14 * Math.sin(j / 2.1 + i));
+  const nearChange = change ?? 0;
+  const filteredEmps = query
+    ? employees.filter((e) =>
+        [e.name, e.email ?? "", e.department ?? "", e.wallet, e.jobTitle ?? ""].join(" ").toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
 
   return (
     <main className="min-h-screen overflow-x-clip pb-16">
-      <GridLines />
+      {/* left icon rail */}
+      <nav className="rail" aria-label="Primary">
+        <div className="rail-logo" title="NearHr">N</div>
+        <button className="rail-btn active" title="Dashboard" aria-label="Dashboard">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+        </button>
+        <button className="rail-btn" title="Wallet" onClick={() => setReceiveOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 7h18v12H3z" />
+            <path d="M3 7l3-3h12l3 3" />
+            <circle cx="16.5" cy="13" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        <button className="rail-btn" title="Send" onClick={() => setSendOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="2" y="5" width="20" height="14" rx="2.5" />
+            <path d="M2 10h20" />
+          </svg>
+        </button>
+        <button className="rail-btn" title="Payroll" onClick={() => setPayrollOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+            <path d="M9 8h6M9 12h6" />
+          </svg>
+        </button>
+        <button className="rail-btn" title="Analytics" onClick={() => document.getElementById("analytics")?.scrollIntoView({ behavior: "smooth" })}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+          </svg>
+        </button>
+        <button className="rail-btn" title="Swap" onClick={() => setSwapOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M7 8h13l-3-3M17 16H4l3 3" />
+          </svg>
+        </button>
+        <div className="rail-spacer" />
+        <button className="rail-btn" title="Sign out" onClick={signOut}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" />
+          </svg>
+        </button>
+      </nav>
 
-      {/* top bar */}
-      <header className="sticky top-0 z-30 border-b border-[var(--color-rule)] bg-[var(--color-bg)]">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-5 py-3.5 md:px-8">
-          <Logo />
-          <div className="flex items-center gap-2.5">
-            <div className="seg hidden sm:inline-flex">
-              <button className={network === "testnet" ? "active" : ""}>Testnet</button>
-              <button className={network === "mainnet" ? "active" : ""}>Mainnet</button>
-            </div>
-            <button className="icon-btn" onClick={refreshAll} title="Refresh" aria-label="Refresh">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-2 border border-[var(--color-rule)] bg-white py-1 pl-1 pr-3">
-              {user.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar} alt="" className="h-7 w-7 object-cover" />
-              ) : (
-                <div className="grid h-7 w-7 place-items-center bg-[var(--color-accent)] text-xs font-bold text-white">
-                  {initials}
-                </div>
-              )}
-              <span className="hidden max-w-[140px] truncate text-sm font-medium sm:block">{user.name || user.email}</span>
-              <button onClick={signOut} className="text-xs text-[var(--color-faint)] transition hover:text-[var(--color-danger)]">
-                Sign out
+      <div className="rail-main">
+        <div className="mx-auto max-w-[1240px] px-5 md:px-8">
+          {/* top bar */}
+          <div className="topbar">
+            <h1 className="text-xl font-bold tracking-tight md:text-2xl">Dashboard</h1>
+            <div className="flex items-center gap-3">
+              <div className="search-pill">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4.3-4.3" />
+                </svg>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search employees, wallets, runs"
+                  aria-label="Search"
+                />
+              </div>
+              <button className="icon-btn" onClick={refreshAll} title="Refresh" aria-label="Refresh">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+                </svg>
               </button>
+              <div className="flex items-center gap-2 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] py-1 pl-1 pr-3">
+                {user.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                ) : (
+                  <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-xs font-bold text-white">
+                    {initials}
+                  </div>
+                )}
+                <span className="hidden max-w-[140px] truncate text-sm font-medium sm:block">{user.name || user.email}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
 
-      <div className="mx-auto max-w-[1280px] px-5 pt-6 md:px-8">
-        {/* hero */}
-        <section className="fade-up mb-5 grid gap-4 lg:grid-cols-12">
-          <div className="hero-card relative overflow-hidden p-6 lg:col-span-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="eyebrow">Portfolio value</div>
-                <div className="mt-2 flex flex-wrap items-end gap-3">
-                  {totalUsd == null ? (
-                    <div className="shimmer h-11 w-56" />
-                  ) : (
-                    <div className="text-4xl font-bold tracking-tight md:text-[44px]">{usd(totalUsd)}</div>
-                  )}
-                  {change != null && (
-                    <div className={`mb-1.5 pill ${change >= 0 ? "pill-green" : "pill-danger"}`}>
-                      {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}% this {range}
-                    </div>
-                  )}
+          {/* hero banner */}
+          <section className="mt-5">
+            <div className="hero-banner fade-up p-6 md:p-8">
+              <div className="globe" aria-hidden />
+              <img src="/img/hero-payment.svg" alt="Payroll payout flow" className="art hidden md:block" />
+              <div className="relative z-10 max-w-[62%]">
+                <div className="eyebrow">Welcome back</div>
+                <h2 className="mt-2 font-[var(--font-display)] text-2xl font-bold leading-tight tracking-tight text-white md:text-[32px]">
+                  Make Your Crypto Transaction Easier
+                </h2>
+                <p className="mt-3 text-sm text-[#9aa0b4]">Check your daily payroll report</p>
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
+                  <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>Run payroll</button>
+                  <button className="btn btn-ghost btn-sm !border-white/25 !text-white hover:!border-white/60 hover:!text-white hover:!bg-white/10" onClick={() => setSwapOpen(true)}>
+                    Swap NEAR and USDC
+                  </button>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--color-muted)]">
+                <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
                   {balanceLoading ? (
                     <span className="pill pill-muted pulse-dot">checking on chain</span>
                   ) : balance?.funded ? (
                     <span className="pill pill-green">
-                      <span className="h-1.5 w-1.5 bg-[var(--color-accent)]" /> wallet active
+                      <span className="h-1.5 w-1.5 bg-[#22c55e]" /> wallet active
                     </span>
                   ) : (
                     <span className="pill pill-warn">
-                      <span className="h-1.5 w-1.5 bg-[var(--color-warn)]" /> fund your wallet to start
+                      <span className="h-1.5 w-1.5 bg-[#f59e0b]" /> fund your wallet to start
                     </span>
                   )}
-                  {prices && <span className="mono text-xs text-[var(--color-faint)]">1 NEAR = {usd(prices.NEAR)}</span>}
-                </div>
-              </div>
-              <div className="coin-stack" aria-hidden>
-                <div className="coin coin-lime" style={{ width: 54, height: 54, fontSize: 22 }}>
-                  N
-                </div>
-                <div className="coin coin-blue" style={{ width: 44, height: 44, fontSize: 16 }}>
-                  U
+                  {prices && <span className="mono text-xs text-[#9aa0b4]">1 NEAR = {usd(prices.NEAR)}</span>}
                 </div>
               </div>
             </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {(["NEAR", "USDC"] as const).map((a) => (
-                <div key={a} className="card-2 flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`coin ${a === "NEAR" ? "coin-lime" : "coin-blue"}`} style={{ width: 30, height: 30, fontSize: 12 }}>
-                      {a[0]}
-                    </div>
-                    <div>
-                      <div className="text-xs text-[var(--color-muted)]">{a}</div>
-                      <div className="mono text-sm font-semibold">{assetOf(a)}</div>
-                    </div>
-                  </div>
-                  <div className="mono text-sm text-[var(--color-muted)]">
-                    {balance && prices ? usd(Number(assetOf(a)) * prices[a]) : "…"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass fade-up d2 grid grid-cols-2 gap-3 p-4 lg:col-span-4">
-            {[
-              { label: "Send", sub: "any wallet", onClick: () => setSendOpen(true), hot: true, dim: false },
-              { label: "Receive", sub: "your address", onClick: () => setReceiveOpen(true), hot: false, dim: false },
-              { label: "Buy", sub: "coming soon", onClick: () => notify("err", "buying is coming soon"), hot: false, dim: true },
-              { label: "Swap", sub: "coming soon", onClick: () => notify("err", "swap is coming soon"), hot: false, dim: true },
-            ].map((a) => (
-              <button
-                key={a.label}
-                onClick={a.onClick}
-                disabled={a.dim}
-                className="card-2 glass-hover flex flex-col items-start gap-1 px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span className={`text-base font-bold ${a.hot ? "text-[var(--color-accent-2)]" : ""}`}>{a.label}</span>
-                <span className="text-xs text-[var(--color-faint)]">{a.sub}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+          </section>
 
         {/* reminder banner */}
         {isEmployer && schedule && (schedule.isOverdue || schedule.reminderWindow) && (
@@ -686,75 +736,154 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* chart + tokens */}
+        {/* asset stat cards */}
         {isEmployer && (
-          <section className="mb-5 grid gap-4 lg:grid-cols-12">
+          <section className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div className="stat-card fade-up d1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">NEAR</span>
+                <div className="coin coin-lime" style={{ width: 34, height: 34, fontSize: 14 }}>
+                  N
+                </div>
+              </div>
+              <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("NEAR")}</div>
+              <div className="mt-1 flex items-center gap-2 text-xs">
+                <span className={`pill ${nearChange >= 0 ? "pill-green" : "pill-danger"}`}>
+                  {nearChange >= 0 ? "▲" : "▼"} {Math.abs(nearChange).toFixed(2)}%
+                </span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `= ${usd(nearAmt * prices.NEAR)}` : "…"}</span>
+              </div>
+              <Sparkline points={spark(1)} color="#4d65ff" />
+            </div>
+
+            <div className="stat-card fade-up d2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">USDC.e</span>
+                <div className="coin coin-blue" style={{ width: 34, height: 34, fontSize: 14 }}>
+                  U
+                </div>
+              </div>
+              <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("USDC")}</div>
+              <div className="mt-1 flex items-center gap-2 text-xs">
+                <span className="pill pill-muted">stable</span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `= ${usd(usdcAmt * prices.USDC)}` : "…"}</span>
+              </div>
+              <Sparkline points={spark(2)} color="#0082f3" />
+            </div>
+
+            <div className="stat-card fade-up d3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">Team size</span>
+                <div className="coin coin-magenta" style={{ width: 34, height: 34, fontSize: 13 }}>
+                  {employees.length}
+                </div>
+              </div>
+              <div className="mt-2 mono text-2xl font-bold tracking-tight">{employees.length}</div>
+              <div className="mt-1 text-xs text-[var(--color-faint)]">
+                active payees · {payments.filter((p) => p.kind === "payroll" && p.status === "confirmed").length} payroll payouts sent
+              </div>
+              <Sparkline points={spark(3)} color="#8b5cf6" />
+            </div>
+          </section>
+        )}
+
+        {/* analytics + operations / transactions */}
+        {isEmployer && (
+          <section id="analytics" className="mb-5 grid gap-4 lg:grid-cols-12">
             <div className="glass fade-up d2 p-5 lg:col-span-8">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="section-title">
-                  <span className="mono text-[var(--color-faint)]">A.</span> Portfolio overview
+                  <span className="mono text-[var(--color-faint)]">A.</span> Analytics
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="hidden items-center gap-4 text-xs text-[var(--color-muted)] sm:flex">
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 bg-[var(--color-ink)]" /> Total value
+                      <span className="h-2 w-2 bg-[#22c55e]" /> up
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 border border-[var(--color-faint)]" /> Invested
+                      <span className="h-2 w-2 bg-[#ef4444]" /> down
                     </span>
                   </div>
-                  <div className="seg">
-                    {(["day", "week", "month", "year"] as Range[]).map((r) => (
-                      <button key={r} className={range === r ? "active" : ""} onClick={() => setRange(r)}>
-                        {r[0].toUpperCase() + r.slice(1)}
+                  <div className="flex items-center gap-1">
+                    {([["1m", "day"], ["3m", "week"], ["6m", "month"], ["1y", "year"]] as [string, Range][]).map(([label, r]) => (
+                      <button key={r} className={`range-chip ${range === r ? "active" : ""}`} onClick={() => setRange(r)}>
+                        {label}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
-              <OverviewChart points={chart} loading={chartLoading || (balanceLoading && totalUsd == null)} />
+              <AnalyticsChart points={chart} loading={chartLoading || (balanceLoading && totalUsd == null)} />
             </div>
 
-            <div className="glass fade-up d3 p-5 lg:col-span-4">
-              <div className="mb-4 section-title">
-                <span className="mono text-[var(--color-faint)]">B.</span> Top tokens and assets
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {(["NEAR", "USDC"] as const).map((a, i) => {
-                  const amount = balance ? Number(balance[a === "NEAR" ? "near" : "usdc"].human) : 0;
-                  const val = balance && prices ? amount * prices[a] : 0;
-                  const pct = totalUsd ? (val / totalUsd) * 100 : 0;
-                  return (
-                    <div key={a} className="card-2 flex items-center justify-between px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`coin ${a === "NEAR" ? "coin-lime" : "coin-blue"}`} style={{ width: 40, height: 40, fontSize: 15 }}>
-                          {a[0]}
+            <div className="flex flex-col gap-4 lg:col-span-4">
+              {/* operations */}
+              <div className="glass fade-up d3 p-5">
+                <div className="mb-4 section-title">
+                  <span className="mono text-[var(--color-faint)]">B.</span> Operations
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>New payroll</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSendOpen(true)}>Send</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setReceiveOpen(true)}>Receive</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSwapOpen(true)}>Swap</button>
+                </div>
+                <div className="mt-4 border-t border-[var(--color-rule)] pt-4">
+                  <div className="mb-2.5 flex items-center justify-between text-xs text-[var(--color-faint)]">
+                    <span className="font-semibold uppercase tracking-wider">Payroll runs</span>
+                    <span className="mono">{runs.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {runs.slice(0, 3).map((r) => {
+                      const ok = r.items.filter((it) => it.status === "confirmed").length;
+                      const done = ok === r.employee_count && r.status !== "failed";
+                      return (
+                        <div key={r.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="mono text-xs text-[var(--color-faint)]">
+                            {r.executed_at ? new Date(r.executed_at).toLocaleDateString() : "queued"}
+                          </span>
+                          <span className="mono">
+                            {ok}/{r.employee_count} ok
+                          </span>
+                          <span className={`pill ${done ? "pill-green" : "pill-warn"}`}>{r.status}</span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold">
-                            {a} <span className="text-xs font-normal text-[var(--color-faint)]">{a === "NEAR" ? "native" : "stable"}</span>
-                          </div>
-                          <div className="mono text-xs text-[var(--color-muted)]">
-                            {amount.toFixed(a === "NEAR" ? 4 : 2)} · {pct.toFixed(1)}% of portfolio
-                          </div>
+                      );
+                    })}
+                    {runs.length === 0 && <div className="text-xs text-[var(--color-faint)]">No runs yet.</div>}
+                  </div>
+                </div>
+              </div>
+
+              {/* transactions */}
+              <div className="glass fade-up d4 flex-1 p-5">
+                <div className="mb-4 section-title">
+                  <span className="mono text-[var(--color-faint)]">C.</span> Transactions
+                </div>
+                <div className="flex flex-col gap-3">
+                  {payments.slice(0, 5).map((p) => (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <div
+                        className="grid h-9 w-9 flex-none place-items-center rounded-full text-sm"
+                        style={{
+                          background:
+                            p.status === "confirmed" ? "rgba(34,197,94,0.14)" : p.status === "pending" ? "rgba(245,158,11,0.14)" : "rgba(239,68,68,0.14)",
+                          color: p.status === "confirmed" ? "#4ade80" : p.status === "pending" ? "#fbbf24" : "#f87171",
+                        }}
+                      >
+                        {p.kind === "swap" ? "⇄" : p.kind === "payroll" ? "✓" : "↑"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{p.note || p.recipientName || p.kind}</div>
+                        <div className="mono text-[11px] text-[var(--color-faint)]">
+                          {shortAddr(p.recipientWallet)} · {fmtDate(p.paidAt)}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="mono text-sm font-bold">{usd(val)}</div>
-                        <div className="mono text-xs text-[var(--color-faint)]">
-                          {prices ? usd(prices[a]) : "…"}/{a}
-                        </div>
+                      <div className="mono text-sm font-semibold">
+                        {p.amount} <span className="text-xs text-[var(--color-faint)]">{p.asset}</span>
                       </div>
                     </div>
-                  );
-                })}
-                <div className="card-2 mt-1 flex items-center justify-between px-4 py-3 text-xs text-[var(--color-muted)]">
-                  <span>Wallet</span>
-                  <span className="mono">{account ? shortAddr(account) : "…"}</span>
-                </div>
-                <div className="card-2 flex items-center justify-between px-4 py-3 text-xs text-[var(--color-muted)]">
-                  <span>Network</span>
-                  <span className="capitalize">{network}</span>
+                  ))}
+                  {payments.length === 0 && <div className="text-xs text-[var(--color-faint)]">No payments yet. Your activity lands here.</div>}
                 </div>
               </div>
             </div>
@@ -777,11 +906,15 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {employees.length === 0 ? (
+              {filteredEmps.length === 0 ? (
                 <div className="grid place-items-center border border-dashed border-[var(--color-rule)] py-12 text-center">
                   <div>
                     <div className="mb-2 mono text-[11px] tracking-widest text-[var(--color-faint)]">DIRECTORY</div>
-                    <p className="text-sm text-[var(--color-muted)]">No employees yet. Add your first person to track who to pay.</p>
+                    <p className="text-sm text-[var(--color-muted)]">
+                      {employees.length === 0
+                        ? "No employees yet. Add your first person to track who to pay."
+                        : "No employees match your search."}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -798,7 +931,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((e, i) => (
+                      {filteredEmps.map((e, i) => (
                         <tr key={e.id}>
                           <td>
                             <div className="flex items-center gap-3">
@@ -992,6 +1125,15 @@ export default function Dashboard() {
       {/* modals */}
       {sendOpen && <SendModal employees={employees} onClose={() => setSendOpen(false)} onSend={sendOneOff} />}
       {receiveOpen && account && <ReceiveModal address={account} onClose={() => setReceiveOpen(false)} />}
+      {swapOpen && (
+        <SwapModal
+          onClose={() => setSwapOpen(false)}
+          onDone={() => {
+            setSwapOpen(false);
+            refreshAll();
+          }}
+        />
+      )}
       {empModal && (
         <EmployeeModal
           employee={empModal.editing}
@@ -1015,7 +1157,131 @@ export default function Dashboard() {
           {toast.msg}
         </div>
       )}
+        </div>
     </main>
+  );
+}
+
+/* ── swap modal (NEAR ↔ USDC.e via Ref Finance, mainnet) ────────────── */
+function SwapModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [fromAsset, setFromAsset] = useState<"NEAR" | "USDC">("NEAR");
+  const [amount, setAmount] = useState("");
+  const [quote, setQuote] = useState<{ out: number; minOut: number; rate: number; poolId: number } | null>(null);
+  const [quoteErr, setQuoteErr] = useState("");
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setQuote(null);
+    setQuoteErr("");
+    if (!amount || Number(amount) <= 0) return;
+    setQuoteLoading(true);
+    api(`/api/swap?from=${fromAsset}&amount=${encodeURIComponent(amount)}`)
+      .then((d) => {
+        if (!live) return;
+        setQuote({ out: d.outHuman, minOut: d.minOutHuman, rate: d.rate, poolId: d.poolId });
+        setQuoteErr("");
+      })
+      .catch((e) => {
+        if (live) setQuoteErr(e.message || "could not fetch a quote");
+      })
+      .finally(() => {
+        if (live) setQuoteLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [fromAsset, amount]);
+
+  async function swap() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const d = await api("/api/swap", {
+        method: "POST",
+        body: JSON.stringify({ from: fromAsset, to: toAsset, amount }),
+      });
+      setResult({ ok: true, msg: d.message || "swap executed on NEAR mainnet" });
+      setTimeout(onDone, 900);
+    } catch (e: any) {
+      setResult({ ok: false, msg: e.message || "swap failed" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const toAsset = fromAsset === "NEAR" ? "USDC" : "NEAR";
+
+  return (
+    <Modal title="Swap assets" onClose={onClose}>
+      <p className="mb-5 text-sm text-[var(--color-muted)]">
+        Swap between NEAR and USDC.e on NEAR mainnet via Ref Finance. Live rate, executed from your wallet.
+      </p>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <span className="label">From</span>
+          <div className="seg w-full">
+            <button className={`${fromAsset === "NEAR" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setFromAsset("NEAR")}>
+              NEAR
+            </button>
+            <button className={`${fromAsset === "USDC" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setFromAsset("USDC")}>
+              USDC
+            </button>
+          </div>
+        </div>
+        <div>
+          <span className="label">Amount</span>
+          <input className="input mono" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="my-4 grid place-items-center">
+        <button
+          className="icon-btn"
+          title="Flip direction"
+          aria-label="Flip direction"
+          onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 3v18M8 15l-4 4 4 4M16 9l4-4-4-4" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="card-2 mb-4 px-4 py-3 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-[var(--color-muted)]">You receive</span>
+          <span className="mono font-semibold">
+            {quoteLoading ? "…" : quote ? `${quote.out.toFixed(6)} ${toAsset}` : "…"}
+          </span>
+        </div>
+        {quote && (
+          <div className="mt-1.5 flex items-center justify-between text-xs text-[var(--color-faint)]">
+            <span>
+              1 {fromAsset} ≈ {quote.rate.toFixed(4)} {toAsset} · pool #{quote.poolId}
+            </span>
+            <span>min {quote.minOut.toFixed(6)} {toAsset}</span>
+          </div>
+        )}
+        {quoteErr && <div className="mt-1.5 text-xs text-[var(--color-danger)]">{quoteErr}</div>}
+      </div>
+
+      {result && (
+        <div
+          className={`mb-4 px-4 py-3 text-sm ${
+            result.ok ? "border border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.1)] text-[#4ade80]" : "border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] text-[var(--color-danger)]"
+          }`}
+        >
+          {result.msg}
+        </div>
+      )}
+
+      <button className="btn btn-primary mt-2 w-full" disabled={busy || !quote} onClick={swap}>
+        {busy ? "Swapping on mainnet" : `Swap ${amount || ""} ${fromAsset} for ${toAsset}`}
+      </button>
+    </Modal>
   );
 }
 

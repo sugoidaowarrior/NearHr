@@ -97,7 +97,7 @@ export async function getPortfolioMeta(userId: string): Promise<PortfolioMeta> {
   const prices = await getPrices();
   return {
     account: view?.nearAccount ?? null,
-    network: process.env.NEAR_NETWORK || "testnet",
+    network: process.env.NEAR_NETWORK || "mainnet",
     prices,
   };
 }

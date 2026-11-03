@@ -25,8 +25,23 @@ import {
   teraToGas,
   formatNearAmount,
 } from "near-api-js";
-import { USDC as USDC_MAIN } from "near-api-js/tokens/mainnet";
 import { USDC as USDC_TEST } from "near-api-js/tokens/testnet";
+
+/**
+ * Mainnet token contracts (single source of truth).
+ *
+ * USDC is standardized on the bridged USDC.e (the deployment Ref Finance v2
+ * pools against), so payroll payouts and swaps use the same token with real
+ * liquidity. wrap.near is the official wNEAR wrapper used as the swap input.
+ */
+export const REF_CONTRACT = "v2.ref-finance.near";
+export const WNEAR_ID = "wrap.near";
+export const USDC_E_ID = "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near";
+
+/** Mainnet USDC = USDC.e (bridged, Ref Finance liquid). Testnet keeps its own. */
+function usdcContractId(networkId: string): string {
+  return networkId === "mainnet" ? USDC_E_ID : USDC_TEST.accountId;
+}
 
 export interface NearConfig {
   networkId: string; // "mainnet" | "testnet"
@@ -35,7 +50,7 @@ export interface NearConfig {
 
 export function defaultNearConfig(): NearConfig {
   const env = process.env;
-  const network = (env.NEAR_NETWORK || "testnet").toLowerCase();
+  const network = (env.NEAR_NETWORK || "mainnet").toLowerCase();
   return {
     networkId: network,
     nodeUrl:
@@ -113,7 +128,7 @@ export async function sendUsdc(
   amountBase: bigint,
   cfg: NearConfig = defaultNearConfig()
 ): Promise<TxResult> {
-  const contractId = cfg.networkId === "mainnet" ? USDC_MAIN.accountId : USDC_TEST.accountId;
+  const contractId = usdcContractId(cfg.networkId);
   const res = (await from.callFunctionRaw({
     contractId,
     methodName: "ft_transfer",
@@ -141,7 +156,7 @@ export async function balanceOf(account: Account): Promise<bigint> {
  * Uses a plain view call — works for implicit accounts (returns 0 if unfunded).
  */
 export async function usdcBalanceOf(owner: string, cfg: NearConfig = defaultNearConfig()): Promise<bigint> {
-  const contractId = cfg.networkId === "mainnet" ? USDC_MAIN.accountId : USDC_TEST.accountId;
+  const contractId = usdcContractId(cfg.networkId);
   const argsBase64 = Buffer.from(JSON.stringify({ account_id: owner })).toString("base64");
   const res = (await nearProvider(cfg).query({
     request_type: "call_function",

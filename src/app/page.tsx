@@ -1,325 +1,269 @@
 import Link from "next/link";
-import { GridLines } from "@/components/GridLines";
-
-const levels = [
-  {
-    n: "01",
-    tag: "LEVEL 0",
-    title: "Transparent",
-    body: "Standard onchain payout to each employee's NEAR account. Cheap, instant, fully public.",
-  },
-  {
-    n: "02",
-    tag: "LEVEL 1",
-    title: "Shielded",
-    body: "Each payment lands in a one time stealth account (SIP Protocol). Only the recipient can claim it.",
-  },
-  {
-    n: "03",
-    tag: "LEVEL 2",
-    title: "Compliant",
-    body: "Shielded, plus a viewing key lets your auditor verify every payment without exposing who got paid.",
-  },
-];
 
 const features = [
   {
-    n: "01",
     title: "Google sign in",
     body: "Your private smart account is created the moment you log in. No seed phrases, no passphrases, nothing to set up.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="5" width="18" height="14" rx="3" />
+        <path d="M8 12l2.5 2.5L16 9" />
+      </svg>
+    ),
   },
   {
-    n: "02",
-    title: "NEAR + USDC payroll",
-    body: "Import a CSV, validate it, and send a run to up to 50 employees in native NEAR or USDC.",
+    title: "NEAR and USDC payroll",
+    body: "Import a CSV, validate it, and send a run to up to 50 employees in native NEAR or USDC.e.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+        <path d="M9 8h6M9 12h6" />
+      </svg>
+    ),
   },
   {
-    n: "03",
     title: "Privacy in three levels",
     body: "Pick transparent, shielded or compliant per payment. Stealth addresses from SIP Protocol.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
   },
   {
-    n: "04",
     title: "Employer audit",
-    body: "A viewing key for your auditor verifies every payout. Encrypted email backup is optional, never compulsory.",
+    body: "A viewing key lets your auditor verify every payout. Encrypted email backup is optional, never compulsory.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="6" />
+        <path d="M20 20l-4.5-4.5M8 11h6M11 8v6" />
+      </svg>
+    ),
   },
+  {
+    title: "Swap on mainnet",
+    body: "Move between NEAR and USDC.e at a live Ref Finance rate, executed straight from your wallet.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M7 8h13l-3-3M17 16H4l3 3" />
+      </svg>
+    ),
+  },
+  {
+    title: "Payday reminders",
+    body: "Set a pay day and NearHr tracks who is due, flags overdue runs, and nudges your team by email.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+      </svg>
+    ),
+  },
+];
+
+const stats = [
+  ["50", "people per payroll run"],
+  ["3", "privacy levels"],
+  ["2", "assets · NEAR and USDC.e"],
+  ["100%", "on NEAR mainnet"],
+];
+
+const steps = [
+  ["Import", "Drop a CSV of your team or add people one by one. Wallet and salary, per person."],
+  ["Validate", "NearHr checks every wallet, amount and privacy level before anything touches the chain."],
+  ["Pay out", "One batch sends up to 50 payments in NEAR or USDC.e, and the ledger records each one."],
 ];
 
 export default function Home() {
   return (
     <main className="min-h-screen overflow-x-clip">
-      <GridLines />
-
-      {/* giant cropped word, mix-blend difference */}
-      <div className="display-word" aria-hidden style={{ top: "16vh" }}>
-        <span>NEARHR</span>
-      </div>
-
       {/* nav */}
-      <header className="page-above">
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8">
-          <div className="flex items-center justify-between border-b border-[var(--color-rule)] pb-5">
-            <Link href="/" className="mono text-[13px] font-semibold tracking-tight">
-              NEARHR<span className="text-[var(--color-accent)]">®</span>
-            </Link>
-            <nav className="flex items-center gap-5">
-              <Link href="/login" className="sweep-link micro hidden font-medium sm:inline-block">
-                Sign in <u />
-              </Link>
-              <Link href="/api/auth/google/start" className="btn btn-primary btn-sm">
-                Get started
-              </Link>
-            </nav>
-          </div>
-        </div>
+      <header className="landing-nav">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-sm font-extrabold text-white">
+            N
+          </span>
+          <span className="text-[15px] font-bold tracking-tight">NearHr</span>
+        </Link>
+        <nav className="flex items-center gap-6">
+          <Link href="#system" className="nav-link hidden sm:inline-block">
+            System
+          </Link>
+          <Link href="#how" className="nav-link hidden sm:inline-block">
+            How it pays
+          </Link>
+          <Link href="#privacy" className="nav-link hidden sm:inline-block">
+            Privacy
+          </Link>
+          <Link href="/login" className="nav-link">
+            Sign in
+          </Link>
+          <Link href="/api/auth/google/start" className="btn btn-primary btn-sm">
+            Get started
+          </Link>
+        </nav>
       </header>
 
-      {/* hero, grid aligned */}
-      <section className="page-above mx-auto max-w-6xl px-5 pt-16 sm:px-8 sm:pt-28">
-        <div className="grid grid-cols-2 gap-5 md:grid-cols-12">
-          <div className="col-span-2 md:col-span-8">
-            <p className="mask-line eyebrow">
-              <span className="mask-d1">Private payroll on NEAR Protocol</span>
-            </p>
-            <h1 className="mt-8">
-              <span className="mask-line display">
-                <span className="mask-d2">Pay your team.</span>
-              </span>
-              <span className="mask-line display">
-                <span className="mask-d3 display-accent">Keep it private.</span>
-              </span>
-            </h1>
-            <p className="fade-up d3 mt-10 max-w-xl text-[15px] leading-relaxed text-[var(--color-muted)]">
-              Salaries and bonuses in NEAR or USDC, with privacy in three levels. Sign in
-              with Google and your private wallet is created automatically. Pay up to 50
-              people per run. No seed phrases. Nothing to set up.
-            </p>
-            <div className="fade-up d4 mt-10 flex flex-wrap items-center gap-4">
-              <Link href="/api/auth/google/start" className="btn btn-primary">
-                Open your wallet
-              </Link>
-              <Link href="/login" className="btn btn-ghost">
-                I have an account
-              </Link>
-            </div>
-          </div>
-          <div className="col-span-2 hidden md:col-span-4 md:block">
-            <div className="mt-24 flex h-full flex-col justify-end border-l border-[var(--color-rule)] pl-6">
-              <div className="mono text-[11px] text-[var(--color-faint)]">
-                SEASON 01
-                <br />
-                MINT 2026
-                <br />
-                NEAR PROTOCOL
-              </div>
-              <div className="mono mt-6 text-[11px] text-[var(--color-faint)]">
-                50 EMPLOYEES PER RUN
-                <br />
-                3 PRIVACY LEVELS
-                <br />
-                2 ASSETS · NEAR / USDC
-              </div>
-            </div>
-          </div>
+      {/* hero */}
+      <section className="landing-hero">
+        <span className="landing-kicker">Private payroll on NEAR Protocol</span>
+        <h1 className="mx-auto mt-4 max-w-4xl font-[var(--font-display)] text-[clamp(44px,7vw,84px)] font-bold leading-[0.98] tracking-[-0.04em]">
+          <span className="mask-line display">
+            <span className="mask-d2">Pay your team.</span>
+          </span>
+          <span className="mask-line display">
+            <span className="mask-d3 display-grad">Keep it private.</span>
+          </span>
+        </h1>
+        <p className="landing-lead mx-auto max-w-2xl">
+          Salaries and bonuses in NEAR or USDC.e with privacy in three levels. Sign in with
+          Google and your private wallet is created automatically. Pay up to 50 people per
+          run, no seed phrases, nothing to set up.
+        </p>
+        <div className="fade-up d4 mt-9 flex flex-wrap items-center justify-center gap-4">
+          <Link href="/api/auth/google/start" className="btn btn-primary">
+            Open your wallet
+          </Link>
+          <Link href="/login" className="btn btn-ghost">
+            I have an account
+          </Link>
+        </div>
+        <div className="fade-up d5 mt-14">
+          <img src="/img/hero-payment.svg" alt="Payroll payout flow from employer to team" className="hero-art" />
         </div>
       </section>
 
-      {/* interlude band */}
-      <section className="page-above band-ink mt-24 py-16 sm:mt-36 sm:py-24">
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-12">
-            <div className="col-span-2 md:col-span-8">
-              <span className="interlude-word" aria-hidden>
-                {"NEARHR".split("").map((ch, i) => (
-                  <span key={i} className="letter" style={{ animationDelay: `${0.15 + i * 0.05}s` }}>
-                    {ch}
-                  </span>
-                ))}
-              </span>
-              <p className="mt-8 max-w-md text-[14px] leading-relaxed text-[rgba(246,247,243,0.72)]">
-                A payroll ledger built like a grid: every run, every payout, every
-                employee, placed on a 12 column composition you can audit at a glance.
-              </p>
-            </div>
-            <div className="col-span-2 hidden flex-col justify-end md:col-span-4 md:flex">
-              <div className="mono text-right text-[11px] text-[rgba(246,247,243,0.55)]">
-                01 / COMPOSITION
-                <br />
-                12 COLUMNS
-                <br />
-                HAIRLINE RULES
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* features, entry rows */}
-      <section className="page-above mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-36">
-        <div className="mb-12 flex items-end justify-between">
-          <h2 className="section-title">
-            <span className="mono text-[var(--color-faint)]">A.</span> The system
-          </h2>
-          <span className="mono micro hidden text-[var(--color-faint)] sm:block">04 ENTRIES</span>
-        </div>
-        <div className="entry-group grid md:grid-cols-2 md:gap-x-12">
-          {features.map((f) => (
-            <div key={f.n} className="entry grid grid-cols-12 gap-3">
-              <div className="col-span-2 md:col-span-1">
-                <span className="entry-n">{f.n}</span>
-              </div>
-              <div className="col-span-10 md:col-span-4">
-                <div className="text-[17px] font-semibold tracking-tight">{f.title}</div>
-              </div>
-              <div className="col-span-12 text-[13.5px] leading-relaxed text-[var(--color-muted)] md:col-span-6">
-                {f.body}
-              </div>
-              <div className="col-span-12 entry-sweep md:col-span-1" />
+      {/* stat band */}
+      <section className="stat-band">
+        <div className="row">
+          {stats.map(([n, cap]) => (
+            <div key={cap}>
+              <div className="num display-grad">{n}</div>
+              <div className="cap">{cap}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* privacy levels */}
-      <section className="page-above band-ground py-24 sm:py-36">
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="mb-12 flex items-end justify-between">
-            <h2 className="section-title">
-              <span className="mono text-[var(--color-faint)]">B.</span> Privacy, in levels
-            </h2>
-            <span className="mono micro hidden text-[var(--color-faint)] sm:block">
-              PER PAYMENT
-            </span>
+      {/* system */}
+      <section id="system" className="landing-section">
+        <div className="landing-kicker">The system</div>
+        <h2 className="landing-h2">Everything a payroll run needs, in one place.</h2>
+        <div className="feature-grid">
+          {features.map((f) => (
+            <div key={f.title} className="feature-card">
+              <div className="feature-ico">{f.icon}</div>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* how it pays */}
+      <section id="how" className="landing-section">
+        <div className="split">
+          <div>
+            <div className="landing-kicker">How it pays</div>
+            <h2 className="landing-h2">From a spreadsheet to the chain in three steps.</h2>
+            <div className="mt-8 flex flex-col gap-5">
+              {steps.map(([t, b], i) => (
+                <div key={t} className="flex gap-4">
+                  <div className="grid h-9 w-9 flex-none place-items-center rounded-[10px] border border-[rgba(77,101,255,0.4)] bg-[rgba(77,101,255,0.12)] font-bold text-[#8fa0ff]">
+                    {i + 1}
+                  </div>
+                  <div>
+                    <div className="text-[16px] font-bold tracking-tight">{t}</div>
+                    <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{b}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid md:grid-cols-3">
-            {levels.map((c, i) => (
-              <div
-                key={c.n}
-                className={`card-2 glass-hover p-7 ${i < 2 ? "md:border-r" : ""}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="entry-n">{c.n}</span>
-                  <span className="pill pill-green">{c.tag}</span>
-                </div>
-                <div className="mt-14 text-[28px] font-semibold uppercase tracking-tight">
-                  {c.title}
-                </div>
-                <p className="mt-4 text-[13.5px] leading-relaxed text-[var(--color-muted)]">
-                  {c.body}
-                </p>
-              </div>
-            ))}
+          <div>
+            <img src="/img/flow.svg" alt="Payroll in three steps: import, validate, payout" className="art" />
           </div>
         </div>
       </section>
 
-      {/* wallet preview */}
-      <section className="page-above mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-36">
-        <div className="mb-12 flex items-end justify-between">
-          <h2 className="section-title">
-            <span className="mono text-[var(--color-faint)]">C.</span> Your account
-          </h2>
-          <span className="mono micro hidden text-[var(--color-faint)] sm:block">
-            AUTO PROVISIONED
-          </span>
+      {/* privacy levels */}
+      <section id="privacy" className="landing-section">
+        <div className="landing-kicker">Privacy, in levels</div>
+        <h2 className="landing-h2">Choose how private each payday is.</h2>
+        <div className="feature-grid mt-10">
+          {[
+            ["01", "Transparent", "Standard onchain payout to each employee account. Cheap, instant, fully public."],
+            ["02", "Shielded", "Each payment lands in a one time stealth account. Only the recipient can claim it."],
+            ["03", "Compliant", "Shielded, plus a viewing key lets your auditor verify every payment without exposing who got paid."],
+          ].map(([n, title, body]) => (
+            <div key={title} className="feature-card">
+              <div className="flex items-center justify-between">
+                <span className="mono text-xs text-[var(--color-faint)]">LEVEL {n}</span>
+                <span className="pill pill-green">{title.toUpperCase()}</span>
+              </div>
+              <h3 className="mt-4 text-[22px]">{title}</h3>
+              <p className="mt-3 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{body}</p>
+            </div>
+          ))}
         </div>
-        <div className="hero-card">
-          <div className="grid md:grid-cols-12">
-            <div className="p-7 md:col-span-7 md:border-r md:border-[var(--color-rule)] md:p-10">
-              <div className="eyebrow">Available balance</div>
-              <div className="mt-4 text-[56px] font-semibold leading-none tracking-tight">
-                0.00
-                <span className="ml-3 text-[22px] text-[var(--color-faint)]">NEAR</span>
-              </div>
-              <div className="mt-2 text-[15px] text-[var(--color-muted)]">
-                0.00 USDC
-              </div>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <span className="mono border border-[var(--color-rule)] bg-white px-3 py-2 text-[12px] text-[var(--color-muted)]">
-                  your 64 character NEAR address appears here
-                </span>
-                <span className="pill pill-green">created on first sign in</span>
-              </div>
-            </div>
-            <div className="p-7 md:col-span-5 md:p-10">
-              <div className="flex items-center gap-6">
-                {["N", "$"].map((t, i) => (
-                  <div key={t} className="flex items-center gap-3">
-                    <div
-                      className={`coin h-11 w-11 text-[15px] ${i === 0 ? "coin-lime" : "coin-blue"}`}
-                    >
-                      {t}
-                    </div>
-                    <div className="mono micro text-[var(--color-muted)]">
-                      {i === 0 ? "NEAR" : "USDC"}
-                      <br />
-                      NATIVE · NEP141
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-10 grid grid-cols-3 gap-0 border border-[var(--color-rule)]">
-                {[
-                  ["50", "people per run"],
-                  ["3", "privacy levels"],
-                  ["2", "assets"],
-                ].map(([n, l], i) => (
-                  <div
-                    key={l}
-                    className={`p-4 text-center ${i < 2 ? "border-r border-[var(--color-rule)]" : ""}`}
-                  >
-                    <div className="text-[26px] font-semibold">{n}</div>
-                    <div className="mt-1 text-[10.5px] uppercase tracking-widest text-[var(--color-faint)]">
-                      {l}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className="split mt-20">
+          <div>
+            <img src="/img/ledger.svg" alt="Payout ledger with recent payroll entries" className="art" />
+          </div>
+          <div>
+            <div className="landing-kicker">The ledger</div>
+            <h2 className="landing-h2">Every payout, recorded and auditable.</h2>
+            <p className="landing-lead">
+              The dashboard keeps a running ledger of each run and each payment, with status,
+              asset and a link back to the onchain transaction. Your auditor gets a viewing
+              key; your team stays private.
+            </p>
+          </div>
+        </div>
+        <div className="split mt-20">
+          <div>
+            <div className="landing-kicker">The team</div>
+            <h2 className="landing-h2">Know who is paid, and who is due.</h2>
+            <p className="landing-lead">
+              A directory of your people with wallet, salary, pay day and last paid amount.
+              Set reminders and NearHr flags anyone still waiting on their pay.
+            </p>
+          </div>
+          <div>
+            <img src="/img/team.svg" alt="Employee directory with privacy levels" className="art" />
           </div>
         </div>
       </section>
 
       {/* cta */}
-      <section className="page-above mx-auto max-w-6xl px-5 pb-28 sm:px-8">
-        <div className="grid md:grid-cols-12">
-          <div className="col-span-12 md:col-span-10 md:col-start-2">
-            <span className="mask-line display">
-              <span className="mask-d1">Start paying</span>
-            </span>
-            <span className="mask-line display">
-              <span className="mask-d2">in the green.</span>
-            </span>
-            <div className="fade-up d4 mt-10 flex flex-wrap gap-4">
-              <Link href="/api/auth/google/start" className="btn btn-primary">
-                Open your wallet
-              </Link>
-            </div>
+      <section className="landing-section">
+        <div className="landing-cta">
+          <div className="landing-kicker">Mainnet ready</div>
+          <h2 className="mx-auto mt-3 max-w-2xl font-[var(--font-display)] text-[clamp(30px,4vw,52px)] font-bold leading-tight tracking-[-0.03em]">
+            Start paying your team on NEAR today.
+          </h2>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/api/auth/google/start" className="btn btn-primary">
+              Open your wallet
+            </Link>
+            <Link href="/login" className="btn btn-ghost !border-white/25 !text-white hover:!border-white/60 hover:!bg-white/10 hover:!text-white">
+              Sign in
+            </Link>
           </div>
         </div>
       </section>
 
       {/* footer */}
-      <footer className="page-above border-t border-[var(--color-rule)]">
-        <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
-          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-            <div>
-              <div className="mono text-[13px] font-semibold">
-                NEARHR<span className="text-[var(--color-accent)]">®</span>
-              </div>
-              <div className="micro mt-3 text-[var(--color-faint)]">
-                NEAR Protocol · SIP stealth addresses · custodial smart accounts
-                <br />
-                Deep ZK privacy rides NEAR Intents, a rail with past compliance
-                pauses. This build uses onchain stealth accounts instead.
-              </div>
-            </div>
-            <div className="mono micro text-[var(--color-faint)]">
-              DESIGN IN THE GRID
-              <br />© 2026 NEARHR
-            </div>
-          </div>
+      <footer className="landing-footer">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-xs font-extrabold text-white">
+            N
+          </span>
+          <span className="font-bold text-[var(--color-ink)]">NearHr</span>
         </div>
+        <span>NEAR Protocol · SIP stealth addresses · custodial smart accounts</span>
+        <span>© 2026 NearHr</span>
       </footer>
     </main>
   );

@@ -24,7 +24,7 @@ export interface PaymentInput {
   employeeId?: string | null;
   recipientName?: string;
   recipientWallet: string;
-  kind: "payroll" | "send";
+  kind: "payroll" | "send" | "swap";
   asset: PaymentAsset;
   amount: string; // human units
   note?: string;
