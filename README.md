@@ -96,10 +96,11 @@ requests. SQLite columns for money are `TEXT` (decimal strings) — 1 NEAR =
   401; vault create → 201 with encrypted record; backup record + re-download;
   payroll preview → 2/2 valid; run create → 201; run list/detail → exact
   decimal amounts; 51 rows → 400; unconfigured Google → actionable 400.
+- **Google OAuth round-trip verified live** (real client, real consent,
+  employer login via `roseflinch5@gmail.com`).
 
-**Not yet exercised** (needs real external state): the Google consent
-round-trip (no client id configured) and actual on-chain transfers (no
-funded account / `NEAR_NETWORK` endpoint). The execution path — signing,
+**Not yet exercised** (needs real external state): actual on-chain transfers
+(no funded account / `NEAR_NETWORK` endpoint). The execution path — signing,
 nonce-ordered sequential sends, stealth funding, claim — is implemented in
 `src/lib/near.ts` / `src/lib/payroll.ts` / `src/lib/privacy.ts` and
 type-checked, but treat it as unverified until one real testnet run.
