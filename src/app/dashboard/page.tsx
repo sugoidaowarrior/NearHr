@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GlassRing } from "@/components/GlassRing";
+import { GridLines } from "@/components/GridLines";
 
 /* ── types ──────────────────────────────────────────────────────────── */
 type User = { id: string; email: string; name: string | null; avatar: string | null; role: string };
@@ -109,8 +109,8 @@ function Logo({ size = 34 }: { size?: number }) {
       <div className="coin coin-lime" style={{ width: size, height: size, fontSize: size * 0.42 }}>
         N
       </div>
-      <div className="text-xl font-extrabold tracking-tight">
-        Near<span className="text-[var(--accent)]">Hr</span>
+      <div className="mono text-base font-bold tracking-tight">
+        NEARHR<span className="text-[var(--color-accent)]">®</span>
       </div>
     </div>
   );
@@ -156,12 +156,6 @@ function OverviewChart({ points, loading }: { points: ChartPoint[]; loading: boo
         style={{ height: "auto" }}
         onMouseLeave={() => setHover(null)}
       >
-        <defs>
-          <linearGradient id="totalFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(53,240,106,0.34)" />
-            <stop offset="100%" stopColor="rgba(53,240,106,0)" />
-          </linearGradient>
-        </defs>
         {Array.from({ length: yTicks + 1 }).map((_, i) => {
           const v = (max / yTicks) * i;
           const yy = y(v);
@@ -174,7 +168,7 @@ function OverviewChart({ points, loading }: { points: ChartPoint[]; loading: boo
             </g>
           );
         })}
-        <path d={areaPath} fill="url(#totalFill)" />
+        <path d={areaPath} fill="rgba(14,163,86,0.08)" />
         <path d={linePath("invested")} fill="none" stroke="rgba(157,177,157,0.5)" strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" />
         <path d={linePath("total")} fill="none" stroke="var(--accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         {hover != null && points[hover] && (
@@ -195,16 +189,16 @@ function OverviewChart({ points, loading }: { points: ChartPoint[]; loading: boo
       </svg>
       {hover != null && points[hover] && (
         <div
-          className="pointer-events-none absolute top-2 z-10 rounded-xl border border-[var(--line)] bg-[#0b1a10]/95 px-3 py-2 text-xs shadow-2xl"
+          className="pointer-events-none absolute top-2 z-10 border border-[var(--color-ink)] bg-[var(--color-bg)] px-3 py-2 text-xs"
           style={{ left: `${Math.min(78, Math.max(2, (x(hover) / W) * 100))}%` }}
         >
           <div className="mb-1 text-[var(--muted)]">{points[hover].label}</div>
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--accent)]" />
+            <span className="inline-block h-2 w-2 bg-[var(--accent)]" />
             <span className="font-semibold">{usd(points[hover].total)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted)]" />
+            <span className="inline-block h-2 w-2 border border-[var(--muted)]" />
             <span>{usd(points[hover].invested)}</span>
           </div>
         </div>
@@ -517,12 +511,12 @@ export default function Dashboard() {
   if (booting || !user) {
     return (
       <main className="grid min-h-screen place-items-center">
-        <div className="aurora" />
+        <GridLines />
         <div className="flex flex-col items-center gap-4">
-          <div className="coin coin-lime float" style={{ width: 56, height: 56, fontSize: 24 }}>
+          <div className="coin coin-lime" style={{ width: 56, height: 56, fontSize: 24 }}>
             N
           </div>
-          <div className="mono text-sm text-[var(--muted)]">{loadErr ? `error: ${loadErr}` : "loading your workspace"}</div>
+          <div className="mono text-sm text-[var(--color-muted)]">{loadErr ? `error: ${loadErr}` : "loading your workspace"}</div>
         </div>
       </main>
     );
@@ -533,11 +527,10 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen overflow-x-clip pb-16">
-      <div className="aurora" />
-      <GlassRing />
+      <GridLines />
 
       {/* top bar */}
-      <header className="sticky top-0 z-30 border-b border-[var(--line-soft)] bg-[var(--background)]/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-[var(--color-rule)] bg-[var(--color-bg)]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-5 py-3.5 md:px-8">
           <Logo />
           <div className="flex items-center gap-2.5">
@@ -550,17 +543,17 @@ export default function Dashboard() {
                 <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
               </svg>
             </button>
-            <div className="flex items-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.04)] py-1 pl-1 pr-3">
+            <div className="flex items-center gap-2 border border-[var(--color-rule)] bg-white py-1 pl-1 pr-3">
               {user.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                <img src={user.avatar} alt="" className="h-7 w-7 object-cover" />
               ) : (
-                <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] text-xs font-bold text-[var(--accent-ink)]">
+                <div className="grid h-7 w-7 place-items-center bg-[var(--color-accent)] text-xs font-bold text-white">
                   {initials}
                 </div>
               )}
               <span className="hidden max-w-[140px] truncate text-sm font-medium sm:block">{user.name || user.email}</span>
-              <button onClick={signOut} className="text-xs text-[var(--muted-2)] transition hover:text-[var(--danger)]">
+              <button onClick={signOut} className="text-xs text-[var(--color-faint)] transition hover:text-[var(--color-danger)]">
                 Sign out
               </button>
             </div>
@@ -571,7 +564,7 @@ export default function Dashboard() {
       <div className="mx-auto max-w-[1280px] px-5 pt-6 md:px-8">
         {/* hero */}
         <section className="fade-up mb-5 grid gap-4 lg:grid-cols-12">
-          <div className="glow glass sheen hero-card relative overflow-hidden p-6 lg:col-span-8">
+          <div className="hero-card relative overflow-hidden p-6 lg:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="eyebrow">Portfolio value</div>
@@ -579,7 +572,7 @@ export default function Dashboard() {
                   {totalUsd == null ? (
                     <div className="shimmer h-11 w-56" />
                   ) : (
-                    <div className="text-4xl font-extrabold tracking-tight md:text-[44px]">{usd(totalUsd)}</div>
+                    <div className="text-4xl font-bold tracking-tight md:text-[44px]">{usd(totalUsd)}</div>
                   )}
                   {change != null && (
                     <div className={`mb-1.5 pill ${change >= 0 ? "pill-green" : "pill-danger"}`}>
@@ -587,26 +580,26 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[var(--color-muted)]">
                   {balanceLoading ? (
                     <span className="pill pill-muted pulse-dot">checking on chain</span>
                   ) : balance?.funded ? (
                     <span className="pill pill-green">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" /> wallet active
+                      <span className="h-1.5 w-1.5 bg-[var(--color-accent)]" /> wallet active
                     </span>
                   ) : (
                     <span className="pill pill-warn">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--warn)]" /> fund your wallet to start
+                      <span className="h-1.5 w-1.5 bg-[var(--color-warn)]" /> fund your wallet to start
                     </span>
                   )}
-                  {prices && <span className="mono text-xs text-[var(--muted-2)]">1 NEAR = {usd(prices.NEAR)}</span>}
+                  {prices && <span className="mono text-xs text-[var(--color-faint)]">1 NEAR = {usd(prices.NEAR)}</span>}
                 </div>
               </div>
               <div className="coin-stack" aria-hidden>
-                <div className="coin coin-lime float" style={{ width: 54, height: 54, fontSize: 22 }}>
+                <div className="coin coin-lime" style={{ width: 54, height: 54, fontSize: 22 }}>
                   N
                 </div>
-                <div className="coin coin-blue float-slow" style={{ width: 44, height: 44, fontSize: 16 }}>
+                <div className="coin coin-blue" style={{ width: 44, height: 44, fontSize: 16 }}>
                   U
                 </div>
               </div>
@@ -620,11 +613,11 @@ export default function Dashboard() {
                       {a[0]}
                     </div>
                     <div>
-                      <div className="text-xs text-[var(--muted)]">{a}</div>
+                      <div className="text-xs text-[var(--color-muted)]">{a}</div>
                       <div className="mono text-sm font-semibold">{assetOf(a)}</div>
                     </div>
                   </div>
-                  <div className="mono text-sm text-[var(--muted)]">
+                  <div className="mono text-sm text-[var(--color-muted)]">
                     {balance && prices ? usd(Number(assetOf(a)) * prices[a]) : "…"}
                   </div>
                 </div>
@@ -643,10 +636,10 @@ export default function Dashboard() {
                 key={a.label}
                 onClick={a.onClick}
                 disabled={a.dim}
-                className="group flex flex-col items-start gap-1 rounded-2xl border border-[var(--line)] bg-[rgba(255,255,255,0.03)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[rgba(53,240,106,0.06)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="card-2 glass-hover flex flex-col items-start gap-1 px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <span className={`text-base font-bold ${a.hot ? "text-[var(--accent)]" : ""}`}>{a.label}</span>
-                <span className="text-xs text-[var(--muted-2)]">{a.sub}</span>
+                <span className={`text-base font-bold ${a.hot ? "text-[var(--color-accent-2)]" : ""}`}>{a.label}</span>
+                <span className="text-xs text-[var(--color-faint)]">{a.sub}</span>
               </button>
             ))}
           </div>
@@ -655,15 +648,24 @@ export default function Dashboard() {
         {/* reminder banner */}
         {isEmployer && schedule && (schedule.isOverdue || schedule.reminderWindow) && (
           <div
-            className={`fade-up d1 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-3.5 ${
-              schedule.isOverdue ? "border-[var(--danger)]/40 bg-[rgba(251,113,133,0.08)]" : "border-[var(--warn)]/40 bg-[rgba(251,191,36,0.08)]"
+            className={`fade-up d1 mb-5 flex flex-wrap items-center justify-between gap-3 border px-5 py-3.5 ${
+              schedule.isOverdue
+                ? "border-[var(--color-danger)] bg-[rgba(191,61,61,0.05)]"
+                : "border-[var(--color-warn)] bg-[rgba(154,106,14,0.06)]"
             }`}
           >
             <div className="flex flex-wrap items-center gap-3">
-              <span className="pill pulse-dot" style={{ background: "rgba(255,255,255,0.1)" }}>
+              <span
+                className="pill pulse-dot"
+                style={
+                  schedule.isOverdue
+                    ? { borderColor: "var(--color-danger)", color: "var(--color-danger)" }
+                    : { borderColor: "var(--color-warn)", color: "var(--color-warn)" }
+                }
+              >
                 {schedule.isOverdue ? "payroll overdue" : `payroll due in ${schedule.daysUntilDue} day${schedule.daysUntilDue === 1 ? "" : "s"}`}
               </span>
-              <span className="text-sm text-[var(--muted)]">
+              <span className="text-sm text-[var(--color-muted)]">
                 {schedule.dueEmployeeCount} active employees · {schedule.unpaidEmployeeCount} not paid yet
               </span>
             </div>
@@ -679,7 +681,7 @@ export default function Dashboard() {
         )}
 
         {loadErr && (
-          <div className="fade-up mb-5 rounded-2xl border border-[var(--danger)]/40 bg-[rgba(251,113,133,0.08)] px-5 py-3 text-sm text-[var(--danger)]">
+          <div className="fade-up mb-5 border border-[var(--color-danger)] bg-[rgba(191,61,61,0.05)] px-5 py-3 text-sm text-[var(--color-danger)]">
             {loadErr}
           </div>
         )}
@@ -689,14 +691,16 @@ export default function Dashboard() {
           <section className="mb-5 grid gap-4 lg:grid-cols-12">
             <div className="glass fade-up d2 p-5 lg:col-span-8">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="section-title">Portfolio overview</div>
+                <div className="section-title">
+                  <span className="mono text-[var(--color-faint)]">A.</span> Portfolio overview
+                </div>
                 <div className="flex items-center gap-4">
-                  <div className="hidden items-center gap-4 text-xs text-[var(--muted)] sm:flex">
+                  <div className="hidden items-center gap-4 text-xs text-[var(--color-muted)] sm:flex">
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-[var(--accent)]" /> Total value
+                      <span className="h-2 w-2 bg-[var(--color-ink)]" /> Total value
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-[var(--muted)]" /> Invested
+                      <span className="h-2 w-2 border border-[var(--color-faint)]" /> Invested
                     </span>
                   </div>
                   <div className="seg">
@@ -712,7 +716,9 @@ export default function Dashboard() {
             </div>
 
             <div className="glass fade-up d3 p-5 lg:col-span-4">
-              <div className="mb-4 section-title">Top tokens and assets</div>
+              <div className="mb-4 section-title">
+                <span className="mono text-[var(--color-faint)]">B.</span> Top tokens and assets
+              </div>
               <div className="flex flex-col gap-2.5">
                 {(["NEAR", "USDC"] as const).map((a, i) => {
                   const amount = balance ? Number(balance[a === "NEAR" ? "near" : "usdc"].human) : 0;
@@ -721,32 +727,32 @@ export default function Dashboard() {
                   return (
                     <div key={a} className="card-2 flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`coin ${a === "NEAR" ? "coin-lime" : "coin-blue"} ${i === 0 ? "float" : "float-slow"}`} style={{ width: 40, height: 40, fontSize: 15 }}>
+                        <div className={`coin ${a === "NEAR" ? "coin-lime" : "coin-blue"}`} style={{ width: 40, height: 40, fontSize: 15 }}>
                           {a[0]}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 text-sm font-semibold">
-                            {a} <span className="text-xs font-normal text-[var(--muted-2)]">{a === "NEAR" ? "native" : "stable"}</span>
+                            {a} <span className="text-xs font-normal text-[var(--color-faint)]">{a === "NEAR" ? "native" : "stable"}</span>
                           </div>
-                          <div className="mono text-xs text-[var(--muted)]">
+                          <div className="mono text-xs text-[var(--color-muted)]">
                             {amount.toFixed(a === "NEAR" ? 4 : 2)} · {pct.toFixed(1)}% of portfolio
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="mono text-sm font-bold">{usd(val)}</div>
-                        <div className="mono text-xs text-[var(--muted-2)]">
+                        <div className="mono text-xs text-[var(--color-faint)]">
                           {prices ? usd(prices[a]) : "…"}/{a}
                         </div>
                       </div>
                     </div>
                   );
                 })}
-                <div className="card-2 mt-1 flex items-center justify-between px-4 py-3 text-xs text-[var(--muted)]">
+                <div className="card-2 mt-1 flex items-center justify-between px-4 py-3 text-xs text-[var(--color-muted)]">
                   <span>Wallet</span>
                   <span className="mono">{account ? shortAddr(account) : "…"}</span>
                 </div>
-                <div className="card-2 flex items-center justify-between px-4 py-3 text-xs text-[var(--muted)]">
+                <div className="card-2 flex items-center justify-between px-4 py-3 text-xs text-[var(--color-muted)]">
                   <span>Network</span>
                   <span className="capitalize">{network}</span>
                 </div>
@@ -772,10 +778,10 @@ export default function Dashboard() {
               </div>
 
               {employees.length === 0 ? (
-                <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--line)] py-12 text-center">
+                <div className="grid place-items-center border border-dashed border-[var(--color-rule)] py-12 text-center">
                   <div>
-                    <div className="mb-2 text-3xl">👥</div>
-                    <p className="text-sm text-[var(--muted)]">No employees yet. Add your first person to track who to pay.</p>
+                    <div className="mb-2 mono text-[11px] tracking-widest text-[var(--color-faint)]">DIRECTORY</div>
+                    <p className="text-sm text-[var(--color-muted)]">No employees yet. Add your first person to track who to pay.</p>
                   </div>
                 </div>
               ) : (
@@ -792,11 +798,16 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((e) => (
+                      {employees.map((e, i) => (
                         <tr key={e.id}>
                           <td>
-                            <div className="font-semibold">{e.name}</div>
-                            <div className="text-xs text-[var(--muted-2)]">{e.jobTitle || e.email || "no contact"}</div>
+                            <div className="flex items-center gap-3">
+                              <span className="entry-n w-6">{String(i + 1).padStart(2, "0")}</span>
+                              <div>
+                                <div className="font-semibold">{e.name}</div>
+                                <div className="text-xs text-[var(--color-faint)]">{e.jobTitle || e.email || "no contact"}</div>
+                              </div>
+                            </div>
                           </td>
                           <td>
                             <span className="pill pill-muted">{e.department || "general"}</span>
@@ -805,13 +816,13 @@ export default function Dashboard() {
                             <span className="mono text-xs">{shortAddr(e.wallet)}</span>
                           </td>
                           <td className="mono">
-                            {e.salary} <span className="text-[var(--muted-2)]">{e.asset}</span>
+                            {e.salary} <span className="text-[var(--color-faint)]">{e.asset}</span>
                           </td>
                           <td>
                             {e.lastPaidAt ? (
                               <div>
                                 <div className="text-xs font-medium">{fmtDate(e.lastPaidAt)}</div>
-                                <div className="mono text-[11px] text-[var(--muted-2)]">
+                                <div className="mono text-[11px] text-[var(--color-faint)]">
                                   {e.lastPaidAmount} {e.lastPaidAsset} · {e.timesPaid}× paid
                                 </div>
                               </div>
@@ -871,8 +882,8 @@ export default function Dashboard() {
 
               <div className="flex-1 space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 360 }}>
                 {runs.length === 0 ? (
-                  <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--line)] py-10 text-center">
-                    <p className="text-sm text-[var(--muted)]">No payroll runs yet. Add employees then run payroll to pay the whole team at once.</p>
+                  <div className="grid place-items-center border border-dashed border-[var(--color-rule)] py-10 text-center">
+                    <p className="text-sm text-[var(--color-muted)]">No payroll runs yet. Add employees then run payroll to pay the whole team at once.</p>
                   </div>
                 ) : (
                   runs.map((r) => (
@@ -916,8 +927,8 @@ export default function Dashboard() {
           <section className="glass fade-up d5 p-5">
             <div className="mb-4 section-title">Recent activity</div>
             {payments.length === 0 ? (
-              <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--line)] py-10">
-                <p className="text-sm text-[var(--muted)]">No payments yet. Send crypto or run payroll and it shows up here.</p>
+              <div className="grid place-items-center border border-dashed border-[var(--color-rule)] py-10">
+                <p className="text-sm text-[var(--color-muted)]">No payments yet. Send crypto or run payroll and it shows up here.</p>
               </div>
             ) : (
               <div className="table-wrap">
@@ -996,8 +1007,8 @@ export default function Dashboard() {
 
       {toast && (
         <div
-          className={`fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border px-5 py-3 text-sm font-semibold shadow-2xl ${
-            toast.kind === "ok" ? "border-[var(--accent)]/40 bg-[#0b1f13] text-[var(--accent)]" : "border-[var(--danger)]/40 bg-[#241015] text-[var(--danger)]"
+          className={`fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 border px-5 py-3 text-sm font-semibold ${
+            toast.kind === "ok" ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-bg)]" : "border-[var(--color-danger)] bg-[var(--color-danger)] text-white"
           }`}
           style={{ animation: "popIn 200ms ease both" }}
         >
@@ -1108,7 +1119,7 @@ function ReceiveModal({ address, onClose }: { address: string; onClose: () => vo
     <Modal title="Receive" onClose={onClose}>
       <div className="flex flex-col items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={qr} alt="QR code" className="h-44 w-44 rounded-2xl border border-[var(--line)] bg-white p-2" />
+        <img src={qr} alt="QR code" className="h-44 w-44 border border-[var(--color-rule)] bg-white p-2" />
         <div>
           <div className="eyebrow mb-1">Send NEAR or USDC to this address</div>
           <div className="mono break-all text-center text-sm">{address}</div>
