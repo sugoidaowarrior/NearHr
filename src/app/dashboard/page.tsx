@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { displayAvatar, type PfpStyle } from "@/lib/pfp";
 
 /* ── types ──────────────────────────────────────────────────────────── */
-type User = { id: string; email: string; name: string | null; avatar: string | null; role: string };
+type User = {
+  id: string;
+  email: string;
+  name: string | null;
+  avatar: string | null;
+  pfp_style: string | null;
+  role: string;
+};
 type Balance = {
   nearAccount: string;
   funded: boolean;
@@ -270,23 +279,38 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/* ── profile modal: pfp upload ─────────────────────────────────────── */
+/* ── profile modal: choose default pfp or upload your own ──────────── */
 function ProfileModal({
   user,
   initials,
   onClose,
-  onSaveAvatar,
+  onSave,
   onSignedOut,
 }: {
   user: User;
   initials: string;
   onClose: () => void;
-  onSaveAvatar: (dataUrl: string | null) => Promise<boolean>;
+  onSave: (patch: { avatar?: string | null; pfpStyle?: PfpStyle }) => Promise<boolean>;
   onSignedOut: () => void;
 }) {
-  const [preview, setPreview] = useState<string | null>(user.avatar);
+  const [mode, setMode] = useState<"default" | "image">(user.avatar ? "image" : "default");
+  const [style, setStyle] = useState<PfpStyle>(user.pfp_style === "B" ? "B" : "A");
+  const [imgPreview, setImgPreview] = useState<string | null>(user.avatar);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  const defaultSrcA = useMemo(() => displayAvatar(null, initials, "A"), [initials]);
+  const defaultSrcB = useMemo(() => displayAvatar(null, initials, "B"), [initials]);
+  const selected =
+    mode === "image" && imgPreview
+      ? imgPreview
+      : style === "B"
+        ? defaultSrcB
+        : defaultSrcA;
+  const unchanged =
+    mode === "image"
+      ? imgPreview === user.avatar
+      : user.avatar === null && style === (user.pfp_style === "B" ? "B" : "A");
 
   async function pickImage(file: File) {
     setErr("");
@@ -314,7 +338,8 @@ function ProfileModal({
       const sy = (img.height - side) / 2;
       ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
       URL.revokeObjectURL(url);
-      setPreview(canvas.toDataURL("image/jpeg", 0.85));
+      setImgPreview(canvas.toDataURL("image/jpeg", 0.85));
+      setMode("image");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "could not read image");
     }
@@ -323,35 +348,60 @@ function ProfileModal({
   async function save() {
     setBusy(true);
     setErr("");
-    const ok = await onSaveAvatar(preview);
+    const patch = mode === "image" ? { avatar: imgPreview } : { avatar: null, pfpStyle: style };
+    const ok = await onSave(patch);
     setBusy(false);
     if (ok) onClose();
-    else setErr("Could not save the image. Try again.");
-  }
-
-  async function remove() {
-    setPreview(null);
-    setBusy(true);
-    setErr("");
-    const ok = await onSaveAvatar(null);
-    setBusy(false);
-    if (ok) onClose();
-    else setErr("Could not remove the image.");
+    else setErr("Could not save your profile. Try again.");
   }
 
   return (
     <Modal title="Your profile" onClose={onClose}>
       <div className="flex flex-col items-center">
-        <div className="relative">
-          {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="Profile" className="h-24 w-24 rounded-full object-cover" />
-          ) : (
-            <div className="grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-2xl font-extrabold text-white">
-              {initials}
-            </div>
-          )}
-          <label className="absolute -bottom-1 -right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] text-[var(--color-ink)] transition hover:border-[var(--color-accent)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={selected} alt="Profile" className="h-24 w-24 rounded-full object-cover" />
+        <div className="mt-4 text-sm font-semibold">{user.name}</div>
+        <div className="mono text-xs text-[var(--color-faint)]">{user.email}</div>
+
+        <div className="mt-5 w-full">
+          <div className="label mb-2">Default picture</div>
+          <div className="flex gap-3">
+            {(["A", "B"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setStyle(s);
+                  setMode("default");
+                  setErr("");
+                }}
+                title={`Style ${s}`}
+                className={`flex flex-1 flex-col items-center gap-2 rounded-xl border p-3 transition ${
+                  mode === "default" && style === s
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
+                    : "border-[var(--color-rule)] hover:border-[var(--color-accent)]"
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={s === "B" ? defaultSrcB : defaultSrcA}
+                  alt={`Default picture style ${s}`}
+                  className="h-14 w-14 rounded-full object-cover"
+                />
+                <span className="text-xs font-semibold text-[var(--color-muted)]">Style {s}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 w-full">
+          <div className="label mb-2">Or upload from your computer</div>
+          <label
+            className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 text-sm font-semibold transition ${
+              mode === "image"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-ink)]"
+                : "border-[var(--color-rule)] text-[var(--color-muted)] hover:border-[var(--color-accent)]"
+            }`}
+          >
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
@@ -362,26 +412,20 @@ function ProfileModal({
                 e.target.value = "";
               }}
             />
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
+            {mode === "image" ? "Change image" : "Choose an image (png, jpeg, webp or gif)"}
           </label>
         </div>
-        <div className="mt-4 text-sm font-semibold">{user.name}</div>
-        <div className="mono text-xs text-[var(--color-faint)]">{user.email}</div>
 
         {err && <div className="mt-4 w-full border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] p-3 text-xs text-[#f87171]">{err}</div>}
 
         <div className="mt-6 flex w-full flex-col gap-2">
-          <button className="btn btn-primary w-full" disabled={busy || preview === user.avatar} onClick={save}>
-            {busy ? "Saving" : "Save profile image"}
+          <button className="btn btn-primary w-full" disabled={busy || unchanged} onClick={save}>
+            {busy ? "Saving" : "Save profile"}
           </button>
-          {preview && (
-            <button className="btn btn-ghost w-full" disabled={busy} onClick={remove}>
-              Remove image, use default
-            </button>
-          )}
           <button className="btn btn-danger w-full" onClick={onSignedOut}>
             Sign out
           </button>
@@ -516,14 +560,22 @@ export default function Dashboard() {
     router.push("/login");
   }, [router]);
 
-  const saveAvatar = useCallback(
-    async (dataUrl: string | null) => {
+  const saveProfile = useCallback(
+    async (patch: { avatar?: string | null; pfpStyle?: PfpStyle }) => {
       try {
         const res = await api("/api/me/avatar", {
           method: "POST",
-          body: JSON.stringify({ avatar: dataUrl }),
+          body: JSON.stringify(patch),
         });
-        setUser((prev) => (prev ? { ...prev, avatar: res.avatar ?? null } : prev));
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                avatar: res.avatar ?? prev.avatar,
+                pfp_style: res.pfpStyle ?? prev.pfp_style,
+              }
+            : prev
+        );
         return true;
       } catch {
         return false;
@@ -680,6 +732,11 @@ export default function Dashboard() {
   const initials = user?.name
     ? user.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()
     : (user?.email?.[0] ?? "U").toUpperCase();
+  const pfpStyle: PfpStyle = user?.pfp_style === "B" ? "B" : "A";
+  const avatarSrc = useMemo(
+    () => (user ? displayAvatar(user.avatar, initials, pfpStyle) : ""),
+    [user, initials, pfpStyle]
+  );
 
   if (booting || !user) {
     return (
@@ -781,19 +838,14 @@ export default function Dashboard() {
                   <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
                 </svg>
               </button>
+              <ThemeToggle compact />
               <button
                 className="flex items-center gap-2 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] py-1 pl-1 pr-3 transition hover:border-[var(--color-accent)]"
                 onClick={() => setProfileOpen(true)}
                 title="Your profile"
               >
-                {user.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-                ) : (
-                  <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-xs font-bold text-white">
-                    {initials}
-                  </div>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={avatarSrc} alt="" className="h-7 w-7 rounded-full object-cover" />
                 <span className="hidden max-w-[140px] truncate text-sm font-medium sm:block">{user.name || user.email}</span>
               </button>
             </div>
@@ -1274,7 +1326,7 @@ export default function Dashboard() {
           user={user}
           initials={initials}
           onClose={() => setProfileOpen(false)}
-          onSaveAvatar={saveAvatar}
+          onSave={saveProfile}
           onSignedOut={() => {
             setProfileOpen(false);
             signOut();

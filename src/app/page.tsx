@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const features = [
   {
@@ -99,6 +100,7 @@ export default function Home() {
           <Link href="/login" className="nav-link">
             Sign in
           </Link>
+          <ThemeToggle compact />
           <Link href="/api/auth/google/start" className="btn btn-primary btn-sm">
             Get started
           </Link>

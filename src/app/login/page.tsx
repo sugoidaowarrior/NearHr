@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { resolveSession, COOKIE } from "@/lib/sessions";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Blocking route: reads the session cookie per request (Next 16 cacheComponents).
 export const instant = false;
@@ -25,9 +26,12 @@ export default async function Login({
           </span>
           <span className="text-[15px] font-bold tracking-tight">NearHr</span>
         </Link>
-        <Link href="/" className="nav-link">
-          Back to site
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="nav-link">
+            Back to site
+          </Link>
+          <ThemeToggle compact />
+        </div>
       </div>
 
       <div className="flex min-h-screen items-center justify-center px-5 py-10">

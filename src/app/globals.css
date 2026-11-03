@@ -42,6 +42,18 @@
   --color-blue: #3b82f6;
   --color-magenta: #a03d92;
 
+  /* light theme (toggled with .light on <html>) */
+  --color-bg-l: #f3f5f9;
+  --color-bg-2-l: #ffffff;
+  --color-ink-l: #161a23;
+  --color-ground-l: #e7ebf2;
+  --color-rule-l: #dbe0ea;
+  --color-muted-l: #5b6474;
+  --color-faint-l: #8b93a5;
+  --card-l: #ffffff;
+  --rail-l: #ffffff;
+  --line-soft-l: rgba(22, 26, 35, 0.08);
+
   /* legacy aliases so existing JSX keeps working */
   --background: var(--color-bg);
   --foreground: var(--color-ink);
@@ -69,7 +81,47 @@
   --radius: 12px;
   --radius-sm: 8px;
   --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 12px 30px -18px rgba(0, 0, 0, 0.8);
+  --shadow-1-l: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 12px 30px -18px rgba(22, 26, 35, 0.18);
 }
+
+/* ── light theme: overrides only the color tokens ─────────────────── */
+html.light {
+  color-scheme: light;
+  --color-bg: var(--color-bg-l);
+  --color-bg-2: var(--color-bg-2-l);
+  --color-ink: var(--color-ink-l);
+  --color-ground: var(--color-ground-l);
+  --color-rule: var(--color-rule-l);
+  --color-muted: var(--color-muted-l);
+  --color-faint: var(--color-faint-l);
+  --line-soft: var(--line-soft-l);
+  --card: var(--card-l);
+  --card-2: var(--card-l);
+  --accent-ink: #ffffff;
+  --shadow-1: var(--shadow-1-l);
+}
+html.light .grid-lines i { background: rgba(22, 26, 35, 0.05); }
+html.light .card-2 { background: rgba(22, 26, 35, 0.03); }
+html.light .card-2:hover { background: rgba(22, 26, 35, 0.06); }
+html.light .rail { background: var(--rail-l); }
+html.light .rail-btn:hover { background: rgba(22, 26, 35, 0.05); }
+html.light .display-word { color: rgba(77, 101, 255, 0.1); }
+html.light .landing-nav { background: rgba(243, 245, 249, 0.82); }
+html.light .chart-grid line { stroke: rgba(22, 26, 35, 0.08); }
+html.light .modal-panel { background: #ffffff; box-shadow: 0 40px 80px -30px rgba(22, 26, 35, 0.35); }
+html.light .modal-backdrop { background: rgba(22, 26, 35, 0.45); }
+html.light .pill-green { color: #15803d; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.45); }
+html.light .pill-magenta { color: #9d2f8e; background: rgba(160, 61, 146, 0.08); border-color: rgba(160, 61, 146, 0.4); }
+html.light .pill-blue { color: #1d4ed8; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.45); }
+html.light .pill-warn { color: #b45309; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.45); }
+html.light .pill-danger { color: #b91c1c; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); }
+html.light .coin, html.light .coin-slate { background: #eef1f6; }
+html.light .coin-blue { background: rgba(77, 101, 255, 0.12); border-color: rgba(77, 101, 255, 0.4); color: #2742c9; }
+html.light select.input {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b6474' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+}
+html.light ::-webkit-scrollbar-thumb { background: #c3cad8; border-color: var(--color-bg-l); }
+html.light ::-webkit-scrollbar-thumb:hover { background: #aeb7c9; }
 
 @theme inline {
   --color-background: var(--color-bg);

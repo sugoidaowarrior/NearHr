@@ -161,6 +161,14 @@ export function initDb(): void {
     db.exec(`UPDATE users SET avatar = NULL`);
     db.prepare("PRAGMA user_version = 2").run();
   }
+  if (ver < 3) {
+    // Default monogram pfp style (A = blue gradient initials, B = solid hue).
+    const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "pfp_style")) {
+      db.exec("ALTER TABLE users ADD COLUMN pfp_style TEXT DEFAULT 'A'");
+    }
+    db.prepare("PRAGMA user_version = 3").run();
+  }
   const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
     name: string;
     type: string;
