@@ -1,0 +1,124 @@
+<svg viewBox="0 0 1600 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Global payroll map: payments flowing from Lagos to teams in Austin, London, Nairobi, Berlin, Tokyo and Sydney">
+  <defs>
+    <linearGradient id="nb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4d65ff"/>
+      <stop offset="100%" stop-color="#0082f3"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="26"/></filter>
+  </defs>
+
+  <rect width="1600" height="720" fill="#0a0d15"/>
+  <ellipse cx="640" cy="360" rx="460" ry="320" fill="#4d65ff" opacity="0.10" filter="url(#soft)"/>
+  <ellipse cx="1380" cy="180" rx="360" ry="240" fill="#0082f3" opacity="0.08" filter="url(#soft)"/>
+
+  <g font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+    <!-- dot grid -->
+    <g fill="#e9edef" opacity="0.05">
+      <g id="dg">
+        <circle cx="60" cy="80" r="2"/><circle cx="130" cy="80" r="2"/><circle cx="200" cy="80" r="2"/><circle cx="270" cy="80" r="2"/><circle cx="340" cy="80" r="2"/><circle cx="410" cy="80" r="2"/><circle cx="480" cy="80" r="2"/><circle cx="550" cy="80" r="2"/><circle cx="620" cy="80" r="2"/><circle cx="690" cy="80" r="2"/><circle cx="760" cy="80" r="2"/><circle cx="830" cy="80" r="2"/><circle cx="900" cy="80" r="2"/><circle cx="970" cy="80" r="2"/><circle cx="1040" cy="80" r="2"/><circle cx="1110" cy="80" r="2"/><circle cx="1180" cy="80" r="2"/><circle cx="1250" cy="80" r="2"/><circle cx="1320" cy="80" r="2"/><circle cx="1390" cy="80" r="2"/><circle cx="1460" cy="80" r="2"/><circle cx="1530" cy="80" r="2"/>
+      </g>
+      <use href="#dg" y="70"/><use href="#dg" y="140"/><use href="#dg" y="210"/><use href="#dg" y="280"/><use href="#dg" y="350"/><use href="#dg" y="420"/><use href="#dg" y="490"/><use href="#dg" y="560"/><use href="#dg" y="630"/>
+    </g>
+
+    <!-- simplified continents -->
+    <g fill="#141a29" stroke="#2a3346" stroke-width="1.5" stroke-opacity="0.7">
+      <path d="M560 290 q34 -26 84 -21 q48 5 62 40 q12 31 -8 66 q-16 36 -10 74 q7 36 -21 57 q-29 19 -53 1 q-26 -21 -31 -57 q-9 -46 -24 -77 q-14 -36 1 -83 z"/>
+      <path d="M628 172 q30 -21 74 -16 q40 5 52 31 q9 26 -14 45 q-28 21 -61 14 q-35 -7 -52 -31 q-11 -21 1 -43 z"/>
+      <path d="M790 150 q70 -24 153 -7 q71 14 109 57 q35 40 21 88 q-14 45 -61 62 q-52 19 -108 4 q-61 -14 -99 -57 q-35 -40 -33 -87 q2 -35 18 -60 z"/>
+      <path d="M190 150 q52 -21 109 -9 q52 11 66 47 q14 35 -9 68 q-26 35 -73 40 q-52 5 -88 -21 q-33 -24 -35 -64 q-2 -33 30 -61 z"/>
+      <path d="M330 340 q35 -14 66 9 q31 24 26 66 q-5 45 -31 85 q-21 33 -49 19 q-29 -14 -33 -57 q-7 -52 -2 -87 q2 -23 23 -35 z"/>
+      <path d="M1240 490 q35 -12 66 5 q28 16 21 47 q-7 31 -40 38 q-35 7 -56 -16 q-19 -21 -9 -49 q7 -17 18 -25 z"/>
+    </g>
+
+    <!-- ===== routes from Lagos ===== -->
+    <g fill="none" stroke-width="2.4" stroke-dasharray="1 10" stroke-linecap="round">
+      <path d="M620 400 Q575 270 745 200" stroke="#4d65ff" stroke-opacity="0.6"/>
+      <path d="M620 400 Q545 300 830 245" stroke="#4d65ff" stroke-opacity="0.4"/>
+      <path d="M620 400 Q430 280 300 210" stroke="#0082f3" stroke-opacity="0.55"/>
+      <path d="M620 400 Q830 330 1035 230" stroke="#0082f3" stroke-opacity="0.55"/>
+      <path d="M620 400 Q940 350 1215 250" stroke="#4d65ff" stroke-opacity="0.45"/>
+      <path d="M620 400 Q940 520 1275 505" stroke="#0082f3" stroke-opacity="0.4"/>
+    </g>
+
+    <!-- travelling pulses -->
+    <g>
+      <circle r="6" fill="#9db8ff"><animateMotion dur="4s" repeatCount="indefinite" path="M620 400 Q575 270 745 200"/></circle>
+      <circle r="6" fill="#9db8ff"><animateMotion dur="5s" begin="1.2s" repeatCount="indefinite" path="M620 400 Q430 280 300 210"/></circle>
+      <circle r="6" fill="#7cc4ff"><animateMotion dur="5.5s" begin="0.6s" repeatCount="indefinite" path="M620 400 Q830 330 1035 230"/></circle>
+      <circle r="6" fill="#7cc4ff"><animateMotion dur="6s" begin="2.2s" repeatCount="indefinite" path="M620 400 Q940 350 1215 250"/></circle>
+      <circle r="6" fill="#9db8ff"><animateMotion dur="6.5s" begin="1.6s" repeatCount="indefinite" path="M620 400 Q940 520 1275 505"/></circle>
+      <circle r="5" fill="#7cc4ff"><animateMotion dur="4.8s" begin="0.9s" repeatCount="indefinite" path="M620 400 Q545 300 830 245"/></circle>
+    </g>
+
+    <!-- city nodes -->
+    <g>
+      <!-- Lagos (origin) -->
+      <g transform="translate(620 400)">
+        <circle r="30" fill="#4d65ff" opacity="0.16"><animate attributeName="r" values="22;40;22" dur="3s" repeatCount="indefinite"/></circle>
+        <circle r="15" fill="#0a0d15" stroke="url(#nb)" stroke-width="3.4"/>
+        <circle r="6" fill="#9db8ff"/>
+        <rect x="28" y="-18" width="118" height="44" rx="11" fill="#12151e" stroke="#4d65ff" stroke-opacity="0.55"/>
+        <text x="44" y="2" fill="#e9edef" font-size="16" font-weight="800">Lagos</text>
+        <text x="44" y="20" fill="#9db8ff" font-size="11.5">payroll origin</text>
+      </g>
+      <!-- London -->
+      <g transform="translate(745 200)">
+        <circle r="10" fill="#0a0d15" stroke="#4d65ff" stroke-width="2.6"/>
+        <circle r="3.8" fill="#9db8ff"/>
+        <text x="20" y="-8" fill="#e9edef" font-size="15" font-weight="700">London</text>
+        <text x="20" y="10" fill="#758696" font-size="11.5">12 paid · GBP</text>
+      </g>
+      <!-- Nairobi -->
+      <g transform="translate(830 245)">
+        <circle r="10" fill="#0a0d15" stroke="#0082f3" stroke-width="2.6"/>
+        <circle r="3.8" fill="#7cc4ff"/>
+        <text x="20" y="18" fill="#e9edef" font-size="15" font-weight="700">Nairobi</text>
+        <text x="20" y="36" fill="#758696" font-size="11.5">7 paid · KES</text>
+      </g>
+      <!-- Austin -->
+      <g transform="translate(300 210)">
+        <circle r="10" fill="#0a0d15" stroke="#0082f3" stroke-width="2.6"/>
+        <circle r="3.8" fill="#7cc4ff"/>
+        <text x="-20" y="-8" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">Austin</text>
+        <text x="-20" y="10" fill="#758696" font-size="11.5" text-anchor="end">9 paid · USD</text>
+      </g>
+      <!-- Berlin -->
+      <g transform="translate(1035 230)">
+        <circle r="10" fill="#0a0d15" stroke="#4d65ff" stroke-width="2.6"/>
+        <circle r="3.8" fill="#9db8ff"/>
+        <text x="20" y="-8" fill="#e9edef" font-size="15" font-weight="700">Berlin</text>
+        <text x="20" y="10" fill="#758696" font-size="11.5">8 paid · EUR</text>
+      </g>
+      <!-- Tokyo -->
+      <g transform="translate(1215 250)">
+        <circle r="10" fill="#0a0d15" stroke="#0082f3" stroke-width="2.6"/>
+        <circle r="3.8" fill="#7cc4ff"/>
+        <text x="20" y="2" fill="#e9edef" font-size="15" font-weight="700">Tokyo</text>
+        <text x="20" y="20" fill="#758696" font-size="11.5">11 paid · JPY</text>
+      </g>
+      <!-- Sydney -->
+      <g transform="translate(1275 505)">
+        <circle r="10" fill="#0a0d15" stroke="#4d65ff" stroke-width="2.6"/>
+        <circle r="3.8" fill="#9db8ff"/>
+        <text x="-20" y="4" fill="#e9edef" font-size="15" font-weight="700" text-anchor="end">Sydney</text>
+        <text x="-20" y="22" fill="#758696" font-size="11.5" text-anchor="end">3 paid · AUD</text>
+      </g>
+    </g>
+
+    <!-- top right summary chips -->
+    <g transform="translate(1290 84)">
+      <rect width="252" height="58" rx="14" fill="#12151e" stroke="#22c07a" stroke-opacity="0.4"/>
+      <circle cx="30" cy="29" r="7" fill="#22c07a"/>
+      <text x="52" y="25" fill="#e9edef" font-size="15" font-weight="700">50 / 50 settled</text>
+      <text x="52" y="44" fill="#758696" font-size="11.5">avg 3.4s per payout</text>
+    </g>
+    <g transform="translate(1290 156)">
+      <rect width="252" height="58" rx="14" fill="#12151e" stroke="#4d65ff" stroke-opacity="0.4"/>
+      <text x="26" y="25" fill="#9db8ff" font-size="15" font-weight="700">₦12,480,000 paid</text>
+      <text x="26" y="44" fill="#758696" font-size="11.5">6 currencies · 1 run</text>
+    </g>
+
+    <!-- bottom note (kept inside safe area) -->
+    <text x="60" y="676" fill="#5b6474" font-size="13">Every receipt lands on NEAR mainnet · auditors verify with your viewing key</text>
+  </g>
+</svg>

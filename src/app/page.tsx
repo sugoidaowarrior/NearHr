@@ -76,6 +76,22 @@ const steps = [
   ["Pay out", "One batch sends up to 50 payments in NEAR or USDC.e, and the ledger records each one."],
 ];
 
+function CheckList({ rows }: { rows: [string, string][] }) {
+  return (
+    <div className="check-grid">
+      {rows.map(([t, b]) => (
+        <div key={t} className="check-item">
+          <span className="check-dot" />
+          <div>
+            <div className="text-[15px] font-bold tracking-tight">{t}</div>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{b}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <main className="min-h-screen overflow-x-clip">
@@ -91,8 +107,11 @@ export default function Home() {
           <Link href="#system" className="nav-link hidden sm:inline-block">
             System
           </Link>
-          <Link href="#how" className="nav-link hidden sm:inline-block">
-            How it pays
+          <Link href="#borders" className="nav-link hidden sm:inline-block">
+            Across borders
+          </Link>
+          <Link href="#payroll" className="nav-link hidden sm:inline-block">
+            Payroll
           </Link>
           <Link href="#privacy" className="nav-link hidden sm:inline-block">
             Privacy
@@ -109,31 +128,57 @@ export default function Home() {
 
       {/* hero */}
       <section className="landing-hero">
-        <span className="landing-kicker">Private payroll on NEAR Protocol</span>
+        <span className="landing-kicker">HR and Payroll on NEAR Protocol</span>
         <h1 className="mx-auto mt-4 max-w-4xl font-[var(--font-display)] text-[clamp(44px,7vw,84px)] font-bold leading-[0.98] tracking-[-0.04em]">
           <span className="mask-line display">
-            <span className="mask-d2">Pay your team.</span>
+            <span className="mask-d2">Pay your team</span>
           </span>
           <span className="mask-line display">
-            <span className="mask-d3 display-grad">Keep it private.</span>
+            <span className="mask-d3 display-grad">across borders.</span>
           </span>
         </h1>
         <p className="landing-lead mx-auto max-w-2xl">
-          Salaries and bonuses in NEAR or USDC.e with privacy in three levels. Sign in with
-          Google and your private wallet is created automatically. Pay up to 50 people per
-          run, no seed phrases, nothing to set up.
+          We make HR and payroll work across borders. Streamline your payroll tasks and workflows
+          to manage your local and global team, run payroll on time in multiple currencies, and
+          keep every receipt on NEAR mainnet. HR and payroll, made easy.
         </p>
         <div className="fade-up d4 mt-9 flex flex-wrap items-center justify-center gap-4">
           <Link href="/api/auth/google/start" className="btn btn-primary">
-            Open your wallet
+            Book a demo
           </Link>
           <Link href="/login" className="btn btn-ghost">
             I have an account
           </Link>
         </div>
-        <div className="fade-up d5 mt-14">
-          <img src="/img/hero-payment.svg" alt="Payroll payout flow from employer to team" className="hero-art" />
+        <div className="hero-photo fade-up d5">
+          <img src="/img/hr-dashboard.svg" alt="NearHr dashboard: next payroll, total salary in Naira, salary history chart and recent payouts" />
+          <div className="chip c1">
+            <span className="chip-dot ok" />
+            <div>
+              <b>Payday executed</b>
+              <span>50 people · NEAR + USDC.e</span>
+            </div>
+          </div>
+          <div className="chip c2">
+            <div>
+              <b>Privacy level</b>
+              <span>shielded · SIP stealth</span>
+            </div>
+            <span className="chip-badge">3</span>
+          </div>
+          <div className="chip c3">
+            <span className="chip-ico">✓</span>
+            <div>
+              <b>₦12,480,000 sent</b>
+              <span>receipt on NEAR mainnet</span>
+            </div>
+          </div>
         </div>
+      </section>
+
+      {/* trusted band */}
+      <section className="trusted-band">
+        <span>Lagos</span><span>London</span><span>Austin</span><span>Nairobi</span><span>Berlin</span><span>Tokyo</span><span>Sydney</span>
       </section>
 
       {/* stat band */}
@@ -163,36 +208,85 @@ export default function Home() {
         </div>
       </section>
 
+      {/* across borders */}
+      <section id="borders" className="landing-section">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">Putting your business ahead</div>
+          <h2 className="landing-h2">One payroll run, every time zone.</h2>
+          <p className="landing-lead mx-auto">
+            Streamline your HR and payroll tasks and workflows to efficiently manage your local
+            and global team. Run payroll on time in multiple currencies, convert at a live rate,
+            and settle in NEAR or USDC.e. It is HR and payroll made easy, wherever your business
+            takes you.
+          </p>
+        </div>
+        <img src="/img/hr-global.svg" className="mock" alt="Global payroll map: payments flowing from Lagos to teams in Austin, London, Nairobi, Berlin, Tokyo and Sydney" />
+      </section>
+
+      {/* employee payroll */}
+      <section id="payroll" className="landing-section">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">Employee payroll</div>
+          <h2 className="landing-h2">Payroll tools that bend, not break.</h2>
+          <p className="landing-lead mx-auto">
+            No matter your use case or internal process, NearHr delivers a fulfilling pay to your
+            people on time, with an automated payslip and a receipt on NEAR mainnet for every run.
+          </p>
+        </div>
+        <CheckList
+          rows={[
+            ["Multi currency pay", "Run payroll in Naira, dollars or stablecoins and settle in NEAR or USDC.e at a live rate."],
+            ["Custom schedules", "Monthly, weekly or one off bonuses. Set the cadence that fits your operations."],
+            ["Split payroll", "Send part of a salary to one account and the rest elsewhere, with no transfer fees."],
+          ]}
+        />
+        <img src="/img/hr-payslip.svg" className="mock" alt="Automated payslip for Ada Okoye: base salary and bonus in NEAR, net paid in Naira, receipt on NEAR mainnet" />
+      </section>
+
+      {/* people first */}
+      <section className="landing-section">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">Employee benefits</div>
+          <h2 className="landing-h2">Put your people front and center.</h2>
+          <p className="landing-lead mx-auto">
+            It takes more than a salary. NearHr keeps your team directory, pay day and last paid
+            amount in one place, and reminds you when someone is still waiting on their pay.
+          </p>
+        </div>
+        <CheckList
+          rows={[
+            ["Team directory", "Every person with wallet, salary, pay day and privacy level at a glance."],
+            ["Pay day reminders", "Set the date once and NearHr flags anyone still unpaid after the run."],
+            ["Audit viewing key", "Share a read only key so an auditor verifies payouts without exposing funds."],
+          ]}
+        />
+        <img src="/img/hr-directory.svg" className="mock" alt="Team directory: eight people as tiles with privacy rings, filter pills and an audit viewing key panel" />
+      </section>
+
       {/* how it pays */}
       <section id="how" className="landing-section">
-        <div className="split">
-          <div>
-            <div className="landing-kicker">How it pays</div>
-            <h2 className="landing-h2">From a spreadsheet to the chain in three steps.</h2>
-            <div className="mt-8 flex flex-col gap-5">
-              {steps.map(([t, b], i) => (
-                <div key={t} className="flex gap-4">
-                  <div className="grid h-9 w-9 flex-none place-items-center rounded-[10px] border border-[rgba(77,101,255,0.4)] bg-[rgba(77,101,255,0.12)] font-bold text-[#8fa0ff]">
-                    {i + 1}
-                  </div>
-                  <div>
-                    <div className="text-[16px] font-bold tracking-tight">{t}</div>
-                    <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{b}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <img src="/img/flow.svg" alt="Payroll in three steps: import, validate, payout" className="art" />
-          </div>
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">How it pays</div>
+          <h2 className="landing-h2">From a spreadsheet to the chain in three steps.</h2>
         </div>
+        <div className="step-grid">
+          {steps.map(([t, b], i) => (
+            <div key={t} className="step-card">
+              <div className="step-num">{i + 1}</div>
+              <div className="text-[16px] font-bold tracking-tight">{t}</div>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{b}</p>
+            </div>
+          ))}
+        </div>
+        <img src="/img/flow.svg" className="mock" alt="Payroll in three steps: import, validate, payout" />
       </section>
 
       {/* privacy levels */}
       <section id="privacy" className="landing-section">
-        <div className="landing-kicker">Privacy, in levels</div>
-        <h2 className="landing-h2">Choose how private each payday is.</h2>
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">Privacy, in levels</div>
+          <h2 className="landing-h2">Choose how private each payday is.</h2>
+        </div>
         <div className="feature-grid mt-10">
           {[
             ["01", "Transparent", "Standard onchain payout to each employee account. Cheap, instant, fully public."],
@@ -209,33 +303,16 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div className="split mt-20">
-          <div>
-            <img src="/img/ledger.svg" alt="Payout ledger with recent payroll entries" className="art" />
-          </div>
-          <div>
-            <div className="landing-kicker">The ledger</div>
-            <h2 className="landing-h2">Every payout, recorded and auditable.</h2>
-            <p className="landing-lead">
-              The dashboard keeps a running ledger of each run and each payment, with status,
-              asset and a link back to the onchain transaction. Your auditor gets a viewing
-              key; your team stays private.
-            </p>
-          </div>
+        <div className="mx-auto mt-16 max-w-3xl text-center">
+          <div className="landing-kicker">The ledger</div>
+          <h2 className="landing-h2">Every payout, recorded and auditable.</h2>
+          <p className="landing-lead mx-auto">
+            The dashboard keeps a running ledger of each run and each payment, with status, asset
+            and a link back to the onchain transaction. Your auditor gets a viewing key; your team
+            stays private.
+          </p>
         </div>
-        <div className="split mt-20">
-          <div>
-            <div className="landing-kicker">The team</div>
-            <h2 className="landing-h2">Know who is paid, and who is due.</h2>
-            <p className="landing-lead">
-              A directory of your people with wallet, salary, pay day and last paid amount.
-              Set reminders and NearHr flags anyone still waiting on their pay.
-            </p>
-          </div>
-          <div>
-            <img src="/img/team.svg" alt="Employee directory with privacy levels" className="art" />
-          </div>
-        </div>
+        <img src="/img/ledger.svg" className="mock" alt="Payout ledger with recent payroll entries" />
       </section>
 
       {/* cta */}
