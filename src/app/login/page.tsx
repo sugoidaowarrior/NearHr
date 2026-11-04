@@ -34,7 +34,11 @@ export default async function Login({
         </div>
       </div>
 
-      <div className="flex min-h-screen items-center justify-center px-5 py-10">
+      <div className="flex min-h-screen flex-col items-center justify-center px-5 py-10">
+        <div className="mb-6 w-full max-w-md">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="mx-auto h-12 w-auto rounded-xl object-contain" />
+        </div>
         <div className="w-full max-w-md">
           <div className="glass p-7 sm:p-9">
             <div className="mb-6 flex items-center gap-2.5">

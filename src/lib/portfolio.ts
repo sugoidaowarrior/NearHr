@@ -25,17 +25,47 @@ export interface PriceMap {
   NEAR: number;
   USDC: number;
   NGN: number;
+  EUR: number; // USD -> EUR rate (1 USD = EUR EUR) for the currency picker
   source: "live" | "fallback";
   at: number;
 }
 
-export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0, NGN: 1500 };
+export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0, NGN: 1500, EUR: 0.92 };
 const PRICE_TTL_MS = 60_000;
+
+// Pyth price feeds (mainnet). Real time on chain oracle prices. Reading prices
+// requires an API key (PYTH_API_KEY in .env.local); without one we fall back to
+// CoinGecko / CoinCap so the dashboard never hangs.
+const PYTH_NEAR_USD = "c415de8d2eba7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750";
+const PYTH_USDC_USD = "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
 
 let priceCache: { at: number; map: PriceMap } | null = null;
 
+/** One Pyth feed id -> USD price, or null on any failure. */
+async function pythUsd(feedId: string): Promise<number | null> {
+  const key = process.env.PYTH_API_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(
+      `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`,
+      { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(4000), cache: "no-store" }
+    );
+    if (!r.ok) return null;
+    const j = (await r.json().catch(() => null)) as {
+      parsed?: { price?: { price?: string; expo?: number } }[];
+    } | null;
+    const p = j?.parsed?.[0]?.price;
+    if (!p || typeof p.price !== "string" || typeof p.expo !== "number") return null;
+    const v = Number(p.price) * 10 ** p.expo;
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchLiveNearUsd(): Promise<number | null> {
   const sources: Array<() => Promise<number | null>> = [
+    () => pythUsd(PYTH_NEAR_USD),
     async () => {
       const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd", {
         signal: AbortSignal.timeout(4000),
@@ -68,28 +98,39 @@ async function fetchLiveNearUsd(): Promise<number | null> {
   return null;
 }
 
-async function fetchUsdNgn(): Promise<number | null> {
+async function fetchLiveUsdcUsd(): Promise<number | null> {
+  // USDC is a stablecoin pegged to 1.00 USD; Pyth confirms the peg live.
+  const v = await pythUsd(PYTH_USDC_USD);
+  return v != null ? v : null;
+}
+
+async function fetchUsdRates(): Promise<{ NGN: number | null; EUR: number | null }> {
   try {
     const r = await fetch("https://open.er-api.com/v6/latest/USD", {
       signal: AbortSignal.timeout(4000),
       cache: "no-store",
     });
-    if (!r.ok) return null;
-    const j = (await r.json().catch(() => null)) as { rates?: { NGN?: number } } | null;
-    const v = j?.rates?.NGN;
-    return typeof v === "number" && v > 0 ? v : null;
+    if (!r.ok) return { NGN: null, EUR: null };
+    const j = (await r.json().catch(() => null)) as { rates?: { NGN?: number; EUR?: number } } | null;
+    const ngn = j?.rates?.NGN;
+    const eur = j?.rates?.EUR;
+    return {
+      NGN: typeof ngn === "number" && ngn > 0 ? ngn : null,
+      EUR: typeof eur === "number" && eur > 0 ? eur : null,
+    };
   } catch {
-    return null;
+    return { NGN: null, EUR: null };
   }
 }
 
 export async function getPrices(): Promise<PriceMap> {
   if (priceCache && Date.now() - priceCache.at < PRICE_TTL_MS) return priceCache.map;
-  const [live, ngn] = await Promise.all([fetchLiveNearUsd(), fetchUsdNgn()]);
+  const [live, usdcLive, rates] = await Promise.all([fetchLiveNearUsd(), fetchLiveUsdcUsd(), fetchUsdRates()]);
   const map: PriceMap = {
     NEAR: live ?? FALLBACK_USD.NEAR,
-    USDC: FALLBACK_USD.USDC,
-    NGN: ngn ?? FALLBACK_USD.NGN,
+    USDC: usdcLive ?? FALLBACK_USD.USDC,
+    NGN: rates.NGN ?? FALLBACK_USD.NGN,
+    EUR: rates.EUR ?? FALLBACK_USD.EUR,
     source: live != null ? "live" : "fallback",
     at: Date.now(),
   };

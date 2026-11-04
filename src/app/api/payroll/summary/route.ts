@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
   const prices = await getPrices();
   const ngnValue = (near: number, usdc: number) =>
     Math.round((near * prices.NEAR + usdc * prices.USDC) * prices.NGN);
+  const usdValue = (near: number, usdc: number) =>
+    Math.round((near * prices.NEAR + usdc * prices.USDC) * 100) / 100;
 
   // Label each month by its payday, e.g. "Feb 28" (matches how HR thinks of runs).
   const payDay = Math.min(Math.max(1, sched.payDay), 28);
@@ -106,7 +108,9 @@ export async function GET(req: NextRequest) {
       key,
       label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       monthTotal: ngnValue(monthPlanned.NEAR, monthPlanned.USDC),
+      monthTotalUsd: usdValue(monthPlanned.NEAR, monthPlanned.USDC),
       monthPaid: ngnValue(v.NEAR, v.USDC),
+      monthPaidUsd: usdValue(v.NEAR, v.USDC),
       paidCount: v.count,
     };
   });
@@ -132,13 +136,15 @@ export async function GET(req: NextRequest) {
       plannedNear: Math.round(monthPlanned.NEAR * 100) / 100,
       plannedUsdc: Math.round(monthPlanned.USDC * 100) / 100,
       plannedNgn: ngnValue(monthPlanned.NEAR, monthPlanned.USDC),
+      plannedUsd: usdValue(monthPlanned.NEAR, monthPlanned.USDC),
       paidNear: Math.round(monthPaidNear * 100) / 100,
       paidUsdc: Math.round(monthPaidUsdc * 100) / 100,
       paidNgn: ngnValue(monthPaidNear, monthPaidUsdc),
+      paidUsd: usdValue(monthPaidNear, monthPaidUsdc),
       paidCount: monthPaidCount,
     },
     pendingRuns,
     months,
-    prices: { NEAR: prices.NEAR, USDC: prices.USDC, NGN: prices.NGN },
+    prices: { NEAR: prices.NEAR, USDC: prices.USDC, NGN: prices.NGN, EUR: prices.EUR },
   });
 }

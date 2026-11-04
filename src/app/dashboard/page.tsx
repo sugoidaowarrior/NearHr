@@ -13,6 +13,7 @@ type User = {
   avatar: string | null;
   pfp_style: string | null;
   role: string;
+  display_currency?: string;
 };
 type Balance = {
   nearAccount: string;
@@ -20,7 +21,8 @@ type Balance = {
   near: { yocto: string; human: string };
   usdc: { base: string; human: string };
 };
-type Prices = { NEAR: number; USDC: number; NGN: number; source: "live" | "fallback"; at: number };
+type Prices = { NEAR: number; USDC: number; NGN: number; EUR: number; source: "live" | "fallback"; at: number };
+type Currency = "NGN" | "USD" | "EUR";
 type Employee = {
   id: string;
   name: string;
@@ -91,7 +93,9 @@ type SalaryMonth = {
   key: string;
   label: string;
   monthTotal: number;
+  monthTotalUsd: number;
   monthPaid: number;
+  monthPaidUsd: number;
   paidCount: number;
 };
 type SalarySummary = {
@@ -113,9 +117,11 @@ type SalarySummary = {
     plannedNear: number;
     plannedUsdc: number;
     plannedNgn: number;
+    plannedUsd: number;
     paidNear: number;
     paidUsdc: number;
     paidNgn: number;
+    paidUsd: number;
     paidCount: number;
   };
   pendingRuns: {
@@ -127,7 +133,7 @@ type SalarySummary = {
     created_at: string;
   }[];
   months: SalaryMonth[];
-  prices: { NEAR: number; USDC: number; NGN: number };
+  prices: { NEAR: number; USDC: number; NGN: number; EUR: number };
 };
 
 /* ── helpers ────────────────────────────────────────────────────────── */
@@ -144,6 +150,30 @@ const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 const ngn = (n: number) =>
   "₦" + Math.round(n).toLocaleString("en-NG");
+
+/**
+ * Currency aware amount formatters. The employer picks NGN/USD/EUR at sign in;
+ * every amount widget renders in that currency. NGN keeps the naira symbol,
+ * USD and EUR use their standard codes. compact() is for the chart axis (M/K).
+ */
+function makeFmts(currency: Currency, prices: Prices | null) {
+  const isNgn = currency === "NGN";
+  const fmt = (n: number) => {
+    if (isNgn) return ngn(Math.round(n));
+    const code = currency as "USD" | "EUR";
+    return n.toLocaleString("en-US", { style: "currency", currency: code, maximumFractionDigits: 0 });
+  };
+  const compact = (n: number) => {
+    const sym = isNgn ? "₦" : currency === "USD" ? "$" : "€";
+    if (n >= 1_000_000) return sym + (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1000) return sym + (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+    return sym + Math.round(n);
+  };
+  // Convert a USD figure into the chosen display currency.
+  const fromUsd = (usdVal: number) =>
+    isNgn ? usdVal * (prices?.NGN ?? 1500) : currency === "EUR" ? usdVal * (prices?.EUR ?? 0.92) : usdVal;
+  return { fmt, compact, fromUsd, isNgn, symbol: isNgn ? "₦" : currency === "USD" ? "$" : "€" };
+}
 const shortAddr = (a: string) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || "…");
 const nameInitials = (name: string) =>
   name
@@ -211,15 +241,28 @@ function Sparkline({ points, color }: { points: number[]; color: string }) {
 }
 
 /* ── payroll bar chart (disbursed vs total, grouped bars) ──────────── */
-function PayrollBars({ months, loading }: { months: SalaryMonth[]; loading: boolean }) {
+function PayrollBars({
+  months,
+  loading,
+  currency,
+  prices,
+}: {
+  months: SalaryMonth[];
+  loading: boolean;
+  currency: Currency;
+  prices: Prices | null;
+}) {
   const [hover, setHover] = useState<number | null>(null);
+  const F = useMemo(() => makeFmts(currency, prices), [currency, prices]);
+  const valTotal = (m: SalaryMonth) => F.fromUsd(m.monthTotalUsd);
+  const valPaid = (m: SalaryMonth) => F.fromUsd(m.monthPaidUsd);
   const W = 880;
   const H = 360;
   const P = { t: 16, r: 16, b: 30, l: 72 };
   const iw = W - P.l - P.r;
   const ih = H - P.t - P.b;
   const n = Math.max(months.length, 1);
-  const max = Math.max(...months.map((m) => Math.max(m.monthTotal, m.monthPaid)), 1);
+  const max = Math.max(...months.map((m) => Math.max(valTotal(m), valPaid(m))), 1);
   // round the top up to a clean multiple so the axis reads like 1M/2M/3M
   const mag = Math.pow(10, Math.floor(Math.log10(max)));
   const step = mag / 2;
@@ -228,12 +271,7 @@ function PayrollBars({ months, loading }: { months: SalaryMonth[]; loading: bool
   const group = iw / n;
   const barW = Math.min(30, group * 0.3);
   const yTicks = 4;
-  const compact = (v: number) =>
-    v >= 1000
-      ? v >= 1_000_000
-        ? `${v / 1_000_000}M`
-        : `${v / 1000}K`
-      : `${Math.round(v)}`;
+  const compact = (v: number) => F.compact(v);
 
   if (loading) {
     return (
@@ -261,8 +299,8 @@ function PayrollBars({ months, loading }: { months: SalaryMonth[]; loading: bool
         {months.map((m, i) => {
           const cx = P.l + group * i + group / 2;
           const dim = hover == null || hover === i ? 1 : 0.5;
-          const totalY = y(m.monthTotal);
-          const paidY = y(m.monthPaid);
+          const totalY = y(valTotal(m));
+          const paidY = y(valPaid(m));
           return (
             <g key={i} opacity={dim}>
               {/* total payroll (dark) */}
@@ -294,10 +332,10 @@ function PayrollBars({ months, loading }: { months: SalaryMonth[]; loading: bool
         >
           <div className="mb-1 text-[var(--color-faint)]">{months[hover].label}</div>
           <div className="flex items-center gap-1.5 font-semibold">
-            <span className="h-2 w-2 bg-[#5b6474]" /> Total payroll {ngn(months[hover].monthTotal)}
+            <span className="h-2 w-2 bg-[#5b6474]" /> Total payroll {F.fmt(valTotal(months[hover]))}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="h-2 w-2 bg-[#9db8ff]" /> Disbursed {ngn(months[hover].monthPaid)}
+            <span className="h-2 w-2 bg-[#9db8ff]" /> Disbursed {F.fmt(valPaid(months[hover]))}
           </div>
           <div className="mt-0.5 text-[var(--color-faint)]">{months[hover].paidCount} payment{months[hover].paidCount === 1 ? "" : "s"} sent</div>
         </div>
@@ -515,6 +553,8 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [empPrivacy, setEmpPrivacy] = useState<"all" | "transparent" | "shielded" | "compliant">("all");
   const [vaultAccount, setVaultAccount] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<Currency>("NGN");
+  const [currencyOpen, setCurrencyOpen] = useState(false);
 
   const [toast, setToast] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -526,11 +566,26 @@ export default function Dashboard() {
 
   const isEmployer = !!user;
 
+  // Currency aware formatting for every amount on the page.
+  const F = useMemo(() => makeFmts(currency, prices), [currency, prices]);
+  const changeCurrency = useCallback(async (c: Currency) => {
+    setCurrency(c);
+    setCurrencyOpen(false);
+    try {
+      await api("/api/me", { method: "PATCH", body: JSON.stringify({ currency: c }) });
+      notify("ok", `amounts now shown in ${c === "NGN" ? "naira" : c === "USD" ? "dollars" : "euros"}`);
+    } catch {
+      /* best effort, local state already updated */
+    }
+  }, [notify]);
+
   const loadFast = useCallback(async () => {
     setLoadErr("");
     try {
       const me = await api("/api/me");
       setUser(me.user);
+      const cur: Currency = (["NGN", "USD", "EUR"].includes(me.user?.display_currency) ? me.user.display_currency : "NGN") as Currency;
+      setCurrency(cur);
       // Every user is an HR operator of their own workspace.
       const [pf, emps, pay, sch, runRes, sal, vlt] = await Promise.all([
         api("/api/portfolio").catch(() => null),
@@ -655,10 +710,10 @@ export default function Dashboard() {
   );
 
   const sendOneOff = useCallback(
-    async (input: { to: string; asset: string; amount: string; note?: string; employeeId?: string | null }) => {
+    async (input: { to: string; asset: string; amount: string; note?: string; privacy?: string; employeeId?: string | null }) => {
       try {
         await api("/api/send", { method: "POST", body: JSON.stringify(input) });
-        notify("ok", `sent ${input.amount} ${input.asset} to ${shortAddr(input.to)}`);
+        notify("ok", `sent ${input.amount} ${input.asset} to ${shortAddr(input.to)}${input.privacy && input.privacy !== "transparent" ? ` (${input.privacy})` : ""}`);
         setBalance(null);
         setBalanceLoading(true);
         setTimeout(() => loadBalance(), 1500);
@@ -850,7 +905,11 @@ export default function Dashboard() {
         <div className="mx-auto max-w-[1240px] px-5 md:px-8">
           {/* top bar */}
           <div className="topbar">
-            <h1 className="text-xl font-bold tracking-tight md:text-2xl">Dashboard</h1>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="hidden h-8 w-auto rounded-lg object-contain md:block" />
+              <h1 className="text-xl font-bold tracking-tight md:text-2xl">Dashboard</h1>
+            </div>
             <div className="flex items-center gap-3">
               <div className="search-pill">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
@@ -870,6 +929,45 @@ export default function Dashboard() {
                 </svg>
               </button>
               <ThemeToggle compact />
+              <div className="relative">
+                <button
+                  className="flex items-center gap-1 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm font-semibold transition hover:border-[var(--color-accent)]"
+                  onClick={() => setCurrencyOpen((v) => !v)}
+                  title="Change currency"
+                  aria-label="Change currency"
+                >
+                  <span className="mono">{currency}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                {currencyOpen && (
+                  <div className="fixed inset-0 z-30" onClick={() => setCurrencyOpen(false)} />
+                )}
+                {currencyOpen && (
+                  <div className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-[var(--color-rule)] bg-[var(--color-bg-2)] p-1 shadow-xl">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+                      Show amounts in
+                    </div>
+                    {(["NGN", "USD", "EUR"] as Currency[]).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => changeCurrency(c)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition hover:bg-[var(--color-accent-soft)] ${
+                          currency === c ? "text-[var(--color-accent)]" : ""
+                        }`}
+                      >
+                        <span>{c === "NGN" ? "₦ Naira" : c === "USD" ? "$ US Dollar" : "€ Euro"}</span>
+                        {currency === c && (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 className="flex items-center gap-2 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] py-1 pl-1 pr-3 transition hover:border-[var(--color-accent)]"
                 onClick={() => setProfileOpen(true)}
@@ -943,10 +1041,7 @@ export default function Dashboard() {
               </div>
               <div className="mt-3 mono text-3xl font-bold tracking-tight">
                 {salary ? (
-                  <>
-                    <span className="mr-1.5 align-baseline text-2xl font-semibold">₦</span>
-                    {Math.round(salary.month.plannedNgn).toLocaleString("en-NG")}
-                  </>
+                  F.fmt(F.fromUsd(salary.month.plannedUsd))
                 ) : (
                   "…"
                 )}
@@ -958,9 +1053,9 @@ export default function Dashboard() {
                     }${salary.month.plannedUsdc > 0 ? `${salary.month.plannedUsdc.toLocaleString()} USDC` : ""} · ${salary.month.paidCount} payment${salary.month.paidCount === 1 ? "" : "s"} sent`
                   : "Calculating from active employees"}
               </div>
-              {salary && salary.month.paidNgn > 0 && (
+              {salary && salary.month.paidUsd > 0 && (
                 <div className="mt-2 text-xs text-[var(--color-muted)]">
-                  {ngn(salary.month.paidNgn)} already disbursed
+                  {F.fmt(F.fromUsd(salary.month.paidUsd))} already disbursed
                 </div>
               )}
             </div>
@@ -1020,14 +1115,22 @@ export default function Dashboard() {
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("NEAR")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
                 <span className="pill pill-muted">native</span>
-                <span className="mono text-[var(--color-faint)]">{prices ? `= ${usd(nearAmt * prices.NEAR)}` : "…"}</span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `= ${F.fmt(F.fromUsd(nearAmt * prices.NEAR))}` : "…"}</span>
               </div>
               <Sparkline points={spark(1)} color="#4d65ff" />
             </div>
 
             <div className="stat-card fade-up d2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">USDC.e</span>
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+                  USDC.e
+                  <span
+                    title="USDC.e is the bridged version of Circle's USDC that runs natively on NEAR (nep141 token). The swap pools and payroll rails on NEAR hold USDC.e, so NearHr standardises on it. 1 USDC.e stays redeemable for 1 USDC."
+                    className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-[var(--color-rule)] text-[9px] font-bold text-[var(--color-faint)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  >
+                    ?
+                  </span>
+                </span>
                 <div className="coin coin-blue" style={{ width: 34, height: 34, fontSize: 14 }}>
                   U
                 </div>
@@ -1035,7 +1138,7 @@ export default function Dashboard() {
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("USDC")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
                 <span className="pill pill-muted">stable</span>
-                <span className="mono text-[var(--color-faint)]">{prices ? `= ${usd(usdcAmt * prices.USDC)}` : "…"}</span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `= ${F.fmt(F.fromUsd(usdcAmt * prices.USDC))}` : "…"}</span>
               </div>
               <Sparkline points={spark(2)} color="#0082f3" />
             </div>
@@ -1074,7 +1177,7 @@ export default function Dashboard() {
                 </div>
                 <span className="mono text-xs text-[var(--color-faint)]">last 6 paydays</span>
               </div>
-              <PayrollBars months={salary?.months ?? []} loading={!salary} />
+              <PayrollBars months={salary?.months ?? []} loading={!salary} currency={currency} prices={prices} />
             </div>
 
             <div className="flex flex-col gap-4 lg:col-span-4">
@@ -1488,6 +1591,7 @@ export default function Dashboard() {
       {receiveOpen && account && <ReceiveModal address={account} onClose={() => setReceiveOpen(false)} />}
       {swapOpen && (
         <SwapModal
+          prices={prices}
           onClose={() => setSwapOpen(false)}
           onDone={() => {
             setSwapOpen(false);
@@ -1524,25 +1628,39 @@ export default function Dashboard() {
 }
 
 /* ── swap modal (NEAR ↔ USDC.e via Ref Finance, mainnet) ────────────── */
-function SwapModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: () => void; prices: Prices | null }) {
   const [fromAsset, setFromAsset] = useState<"NEAR" | "USDC">("NEAR");
   const [amount, setAmount] = useState("");
-  const [quote, setQuote] = useState<{ out: number; minOut: number; rate: number; poolId: number } | null>(null);
+  const [slippage, setSlippage] = useState(0.5);
+  const [quote, setQuote] = useState<{ expectedOut: string; minOut: string; rate: number; poolId: number; slippage: number } | null>(null);
+  const [intents, setIntents] = useState<{ expectedOut: string; minOut: string; rate: number } | null>(null);
   const [quoteErr, setQuoteErr] = useState("");
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  const toAsset: "NEAR" | "USDC" = fromAsset === "NEAR" ? "USDC" : "NEAR";
+  const amtNum = Number(amount);
+  const hasAmt = amtNum > 0;
+
+  const usdValue = (asset: "NEAR" | "USDC", amt: number) =>
+    prices ? usd(amt * (asset === "NEAR" ? prices.NEAR : prices.USDC)) : null;
+
   useEffect(() => {
     let live = true;
     setQuote(null);
+    setIntents(null);
     setQuoteErr("");
-    if (!amount || Number(amount) <= 0) return;
+    if (!hasAmt) {
+      setQuoteLoading(false);
+      return;
+    }
     setQuoteLoading(true);
-    api(`/api/swap?from=${fromAsset}&amount=${encodeURIComponent(amount)}`)
+    api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(amount)}&slippage=${slippage}`)
       .then((d) => {
         if (!live) return;
-        setQuote({ out: d.outHuman, minOut: d.minOutHuman, rate: d.rate, poolId: d.poolId });
+        setQuote({ expectedOut: d.expectedOut, minOut: d.minOut, rate: Number(d.rate), poolId: d.poolId, slippage: d.slippage });
+        setIntents(d.intents ? { expectedOut: d.intents.expectedOut, minOut: d.intents.minOut, rate: Number(d.intents.rate) } : null);
         setQuoteErr("");
       })
       .catch((e) => {
@@ -1554,7 +1672,7 @@ function SwapModal({ onClose, onDone }: { onClose: () => void; onDone: () => voi
     return () => {
       live = false;
     };
-  }, [fromAsset, amount]);
+  }, [fromAsset, toAsset, amount, slippage, hasAmt]);
 
   async function swap() {
     setBusy(true);
@@ -1562,45 +1680,59 @@ function SwapModal({ onClose, onDone }: { onClose: () => void; onDone: () => voi
     try {
       const d = await api("/api/swap", {
         method: "POST",
-        body: JSON.stringify({ from: fromAsset, to: toAsset, amount }),
+        body: JSON.stringify({ from: fromAsset, to: toAsset, amount, slippage }),
       });
-      setResult({ ok: true, msg: d.message || "swap executed on NEAR mainnet" });
-      setTimeout(onDone, 900);
-    } catch (e: any) {
-      setResult({ ok: false, msg: e.message || "swap failed" });
+      const tx = Array.isArray(d.txHashes) && d.txHashes[0] ? ` · tx ${shortAddr(String(d.txHashes[0]))}` : "";
+      setResult({ ok: true, msg: `submitted on NEAR mainnet · expected ${d.expectedOut} ${toAsset}${tx}` });
+      setTimeout(onDone, 1100);
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : "swap failed" });
     } finally {
       setBusy(false);
     }
   }
 
-  const toAsset = fromAsset === "NEAR" ? "USDC" : "NEAR";
+  const ctaLabel = busy ? "Swapping on mainnet" : hasAmt ? `Swap ${amount} ${fromAsset}` : "Get started";
 
   return (
     <Modal title="Swap assets" onClose={onClose}>
       <p className="mb-5 text-sm text-[var(--color-muted)]">
-        Swap between NEAR and USDC.e on NEAR mainnet via Ref Finance. Live rate, executed from your wallet.
+        Swap between NEAR and USDC.e on NEAR mainnet. Live rate from the Ref Finance pool, executed from your private vault.
       </p>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <span className="label">From</span>
-          <div className="seg w-full">
-            <button className={`${fromAsset === "NEAR" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setFromAsset("NEAR")}>
-              NEAR
-            </button>
-            <button className={`${fromAsset === "USDC" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setFromAsset("USDC")}>
-              USDC
-            </button>
-          </div>
+
+      {/* SELL box */}
+      <div className="card-2 p-3.5">
+        <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+          <span>You sell</span>
+          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {usdValue(fromAsset, hasAmt ? amtNum : 0) || "…"}</span>
         </div>
-        <div>
-          <span className="label">Amount</span>
-          <input className="input mono" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <div className="flex items-center gap-3">
+          <input
+            className="mono min-w-0 flex-1 border-0 bg-transparent p-0 text-3xl font-bold outline-none focus:ring-0"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+            aria-label="Amount to sell"
+          />
+          <button
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm font-bold transition hover:border-[var(--color-accent)]"
+            onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
+            title="Change sell token"
+          >
+            {fromAsset === "NEAR" ? <span className="coin coin-lime" style={{ width: 20, height: 20, fontSize: 10 }}>N</span> : <span className="coin coin-blue" style={{ width: 20, height: 20, fontSize: 10 }}>U</span>}
+            <span>{fromAsset}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      <div className="my-4 grid place-items-center">
+      {/* direction flip */}
+      <div className="relative z-10 -my-3 grid place-items-center">
         <button
-          className="icon-btn"
+          className="icon-btn border border-[var(--color-rule)] bg-[var(--color-bg-2)]"
           title="Flip direction"
           aria-label="Flip direction"
           onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
@@ -1611,36 +1743,86 @@ function SwapModal({ onClose, onDone }: { onClose: () => void; onDone: () => voi
         </button>
       </div>
 
-      <div className="card-2 mb-4 px-4 py-3 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-[var(--color-muted)]">You receive</span>
-          <span className="mono font-semibold">
-            {quoteLoading ? "…" : quote ? `${quote.out.toFixed(6)} ${toAsset}` : "…"}
-          </span>
+      {/* BUY box */}
+      <div className="card-2 p-3.5">
+        <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+          <span>You receive</span>
+          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {usdValue(toAsset, quote ? Number(quote.expectedOut) : 0) || "…"}</span>
         </div>
-        {quote && (
-          <div className="mt-1.5 flex items-center justify-between text-xs text-[var(--color-faint)]">
-            <span>
-              1 {fromAsset} ≈ {quote.rate.toFixed(4)} {toAsset} · pool #{quote.poolId}
-            </span>
-            <span>min {quote.minOut.toFixed(6)} {toAsset}</span>
+        <div className="flex items-center gap-3">
+          <div className="mono min-w-0 flex-1 truncate text-3xl font-bold text-[var(--color-faint)]">
+            {quoteLoading ? "…" : quote ? quote.expectedOut : "0.00"}
           </div>
-        )}
-        {quoteErr && <div className="mt-1.5 text-xs text-[var(--color-danger)]">{quoteErr}</div>}
+          <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] px-3 py-1.5 text-sm font-bold">
+            {toAsset === "NEAR" ? <span className="coin coin-lime" style={{ width: 20, height: 20, fontSize: 10 }}>N</span> : <span className="coin coin-blue" style={{ width: 20, height: 20, fontSize: 10 }}>U</span>}
+            <span>{toAsset}</span>
+            <span
+              title="USDC.e is the bridged version of Circle's USDC that runs natively on NEAR (nep141 token). It is the only USDC form in the NEAR swap pools and the one NearHr pays salaries in. 1 USDC.e stays redeemable for 1 USDC."
+              className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-[var(--color-rule)] text-[9px] font-bold text-[var(--color-faint)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              ?
+            </span>
+          </div>
+        </div>
+        {quoteErr && <div className="mt-2 text-xs text-[var(--color-danger)]">{quoteErr}</div>}
       </div>
+
+      {/* slippage + rate */}
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--color-rule)] px-4 py-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--color-muted)]">Slippage</span>
+          <div className="seg">
+            {[0.1, 0.5, 1].map((s) => (
+              <button key={s} className={slippage === s ? "active" : ""} onClick={() => setSlippage(s)}>
+                {s}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <span className="mono text-[var(--color-faint)]">
+          {quote ? `1 ${fromAsset} = ${quote.rate.toFixed(4)} ${toAsset} · pool #${quote.poolId}` : "live rate"}
+        </span>
+      </div>
+
+      {quote && (
+        <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
+          <div className="card-2 px-4 py-2.5">
+            <div className="text-[var(--color-faint)]">Expected</div>
+            <div className="mono font-semibold">{quote.expectedOut} {toAsset}</div>
+          </div>
+          <div className="card-2 px-4 py-2.5">
+            <div className="text-[var(--color-faint)]">Minimum (after slippage)</div>
+            <div className="mono font-semibold">{quote.minOut} {toAsset}</div>
+          </div>
+        </div>
+      )}
+
+      {intents && (
+        <div className="mt-2 flex items-center justify-between rounded-xl border border-[var(--color-rule)] px-4 py-2.5 text-xs">
+          <span className="font-semibold text-[var(--color-accent)]">Near Intents route</span>
+          <span className="mono text-[var(--color-muted)]">{intents.expectedOut} {toAsset}</span>
+        </div>
+      )}
 
       {result && (
         <div
-          className={`mb-4 px-4 py-3 text-sm ${
-            result.ok ? "border border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.1)] text-[#4ade80]" : "border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] text-[var(--color-danger)]"
+          className={`mb-1 mt-4 px-4 py-3 text-sm ${
+            result.ok
+              ? "border border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.1)] text-[#4ade80]"
+              : "border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] text-[var(--color-danger)]"
           }`}
         >
           {result.msg}
         </div>
       )}
 
-      <button className="btn btn-primary mt-2 w-full" disabled={busy || !quote} onClick={swap}>
-        {busy ? "Swapping on mainnet" : `Swap ${amount || ""} ${fromAsset} for ${toAsset}`}
+      <button
+        className="btn btn-primary mt-4 w-full"
+        disabled={busy || !quote}
+        onClick={swap}
+        title={!quote ? "Enter an amount to get a live quote" : undefined}
+      >
+        {ctaLabel}
       </button>
     </Modal>
   );
@@ -1654,7 +1836,7 @@ function SendModal({
 }: {
   employees: Employee[];
   onClose: () => void;
-  onSend: (i: { to: string; asset: string; amount: string; note?: string; employeeId?: string | null }) => Promise<boolean>;
+  onSend: (i: { to: string; asset: string; amount: string; note?: string; privacy?: string; employeeId?: string | null }) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<"employee" | "custom">("employee");
   const [empId, setEmpId] = useState("");
@@ -1662,6 +1844,7 @@ function SendModal({
   const [asset, setAsset] = useState("NEAR");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [privacy, setPrivacy] = useState<"transparent" | "shielded" | "compliant">("transparent");
   const [busy, setBusy] = useState(false);
 
   const emp = employees.find((e) => e.id === empId);
@@ -1670,10 +1853,17 @@ function SendModal({
   async function submit() {
     if (!dest || !amount) return;
     setBusy(true);
-    const ok = await onSend({ to: dest, asset, amount, note: note || undefined, employeeId: mode === "employee" ? empId : null });
+    const ok = await onSend({ to: dest, asset, amount, note: note || undefined, privacy, employeeId: mode === "employee" ? empId : null });
     setBusy(false);
     if (ok) onClose();
   }
+
+  const privacyNote =
+    privacy === "transparent"
+      ? "straight to the wallet, visible on the NEAR explorer"
+      : privacy === "shielded"
+        ? "funds a one time stealth wallet the recipient claims privately"
+        : "stealth payout with an audit viewing key for records";
 
   return (
     <Modal title="Send crypto" onClose={onClose}>
@@ -1724,6 +1914,47 @@ function SendModal({
           Salary on file: <span className="mono font-semibold text-[var(--foreground)]">{emp.salary} {emp.asset}</span> · {emp.department || "general"}
         </div>
       )}
+
+      <div className="mt-4">
+        <div className="label mb-2">Privacy layer</div>
+        <div className="grid gap-2">
+          {(
+            [
+              ["transparent", "Transparent", "straight to the wallet, visible on the NEAR explorer"],
+              ["shielded", "Shielded", "funds a one time stealth wallet the recipient claims privately"],
+              ["compliant", "Compliant", "stealth payout with an audit viewing key for records"],
+            ] as const
+          ).map(([val, label, desc]) => (
+            <button
+              key={val}
+              onClick={() => setPrivacy(val)}
+              className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
+                privacy === val
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
+                  : "border-[var(--color-rule)] hover:border-[var(--color-accent)]"
+              }`}
+            >
+              <span
+                className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
+                  privacy === val ? "border-[var(--color-accent)]" : "border-[var(--color-faint)]"
+                }`}
+              >
+                {privacy === val && <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className="block text-xs text-[var(--color-muted)]">{desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 text-xs text-[var(--color-faint)]">{privacyNote}</div>
+        {(privacy === "shielded" || privacy === "compliant") && (
+          <div className="mt-2 rounded-lg border border-[var(--color-warn)] bg-[rgba(154,106,14,0.06)] px-3 py-2 text-xs text-[var(--color-warn)]">
+            Stealth sends need a registered NearHr recipient who can claim the payout{asset === "USDC" ? ", and USDC must land on a registered account" : ""}.
+          </div>
+        )}
+      </div>
 
       <div className="mt-4">
         <Field label="Note (optional)">

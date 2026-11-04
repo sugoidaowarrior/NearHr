@@ -98,10 +98,8 @@ export default function Home() {
       {/* nav */}
       <header className="landing-nav">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-sm font-extrabold text-white">
-            N
-          </span>
-          <span className="text-[15px] font-bold tracking-tight">NearHr</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="h-8 w-auto rounded-lg object-contain" />
         </Link>
         <nav className="flex items-center gap-6">
           <Link href="#system" className="nav-link hidden sm:inline-block">
@@ -359,10 +357,8 @@ export default function Home() {
       {/* footer */}
       <footer className="landing-footer">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-gradient-to-br from-[#4d65ff] to-[#0082f3] text-xs font-extrabold text-white">
-            N
-          </span>
-          <span className="font-bold text-[var(--color-ink)]">NearHr</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="h-7 w-auto rounded-lg object-contain" />
         </div>
         <span>NEAR Protocol · SIP stealth addresses · custodial smart accounts</span>
         <span>© 2026 NearHr</span>

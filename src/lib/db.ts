@@ -187,6 +187,15 @@ export function initDb(): void {
     }
     db.prepare("PRAGMA user_version = 5").run();
   }
+  if (ver < 6) {
+    // Chosen display currency for the employer's own dashboard (NGN/USD/EUR).
+    // Picked at first sign in; the amount widgets render in this currency.
+    const uCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    if (!uCols.some((c) => c.name === "display_currency")) {
+      db.exec("ALTER TABLE users ADD COLUMN display_currency TEXT NOT NULL DEFAULT 'NGN'");
+    }
+    db.prepare("PRAGMA user_version = 6").run();
+  }
   const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
     name: string;
     type: string;
