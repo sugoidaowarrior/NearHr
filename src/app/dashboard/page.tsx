@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { displayAvatar, type PfpStyle } from "@/lib/pfp";
+import { NEAR_LOGO, USDC_LOGO } from "@/lib/token-logos";
 
 /* ── types ──────────────────────────────────────────────────────────── */
 type User = {
@@ -202,12 +203,31 @@ const fmtDate = (s: string | null) => {
 const syntheticEmail = (name: string, i: number) =>
   `${(name.replace(/[^a-z0-9]/gi, "").toLowerCase() || "emp")}${i}@payroll.near`;
 
+/** Official token mark on a brand tile. Inlined data URLs, never a broken image. */
+function TokenIcon({ asset, size = 34 }: { asset: "NEAR" | "USDC"; size?: number }) {
+  return (
+    <div
+      className="coin"
+      style={{
+        width: size,
+        height: size,
+        background: asset === "NEAR" ? "linear-gradient(135deg,#4d65ff,#0082f3)" : "#ffffff",
+        borderColor: asset === "NEAR" ? "transparent" : "var(--color-rule)",
+      }}
+    >
+      <img
+        src={asset === "NEAR" ? NEAR_LOGO : USDC_LOGO}
+        alt={asset}
+        style={{ width: "62%", height: "62%", objectFit: "contain", display: "block" }}
+      />
+    </div>
+  );
+}
+
 function Logo({ size = 34 }: { size?: number }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="coin coin-lime" style={{ width: size, height: size, fontSize: size * 0.42 }}>
-        N
-      </div>
+      <TokenIcon asset="NEAR" size={size} />
       <div className="mono text-base font-bold tracking-tight">
         NEARHR<span className="text-[var(--color-accent)]">®</span>
       </div>
@@ -827,9 +847,7 @@ export default function Dashboard() {
     return (
       <main className="grid min-h-screen place-items-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="coin coin-lime" style={{ width: 56, height: 56, fontSize: 24 }}>
-            N
-          </div>
+          <TokenIcon asset="NEAR" size={56} />
           <div className="mono text-sm text-[var(--color-faint)]">{loadErr ? `error: ${loadErr}` : "loading your workspace"}</div>
         </div>
       </main>
@@ -1109,9 +1127,7 @@ export default function Dashboard() {
             <div className="stat-card fade-up d1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">NEAR</span>
-                <div className="coin coin-lime" style={{ width: 34, height: 34, fontSize: 14 }}>
-                  N
-                </div>
+                <TokenIcon asset="NEAR" />
               </div>
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("NEAR")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
@@ -1132,9 +1148,7 @@ export default function Dashboard() {
                     ?
                   </span>
                 </span>
-                <div className="coin coin-blue" style={{ width: 34, height: 34, fontSize: 14 }}>
-                  U
-                </div>
+                <TokenIcon asset="USDC" />
               </div>
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("USDC")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
@@ -1725,7 +1739,7 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
             onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
             title="Change sell token"
           >
-            {fromAsset === "NEAR" ? <span className="coin coin-lime" style={{ width: 20, height: 20, fontSize: 10 }}>N</span> : <span className="coin coin-blue" style={{ width: 20, height: 20, fontSize: 10 }}>U</span>}
+            <TokenIcon asset={fromAsset} size={20} />
             <span>{fromAsset}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M6 9l6 6 6-6" />
@@ -1759,7 +1773,7 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
             {quoteLoading ? "…" : quote ? quote.expectedOut : "0.00"}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] px-3 py-1.5 text-sm font-bold">
-            {toAsset === "NEAR" ? <span className="coin coin-lime" style={{ width: 20, height: 20, fontSize: 10 }}>N</span> : <span className="coin coin-blue" style={{ width: 20, height: 20, fontSize: 10 }}>U</span>}
+            <TokenIcon asset={toAsset} size={20} />
             <span>{toAsset}</span>
             <span
               title="USDC.e is the bridged version of Circle's USDC that runs natively on NEAR (nep141 token). It is the only USDC form in the NEAR swap pools and the one NearHr pays salaries in. 1 USDC.e stays redeemable for 1 USDC."
