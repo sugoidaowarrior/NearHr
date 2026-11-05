@@ -3,6 +3,7 @@ import { getDb } from "./db";
 import {
   accountFromVault,
   defaultNearConfig,
+  ensureUsdcRegistration,
   sendNear,
   sendUsdc,
   toYocto,
@@ -146,6 +147,11 @@ export async function sendOneOff(
 
   const account = accountFromVault(vault.nearAccount, vault.nearMasterKey);
   const cfg = defaultNearConfig();
+  if (asset === "USDC") {
+    // USDC.e storage: first USDC activity on a fresh vault needs registration
+    // (0.125 NEAR, idempotent) or the ft_transfer fails.
+    await ensureUsdcRegistration(account, cfg);
+  }
   const tx =
     asset === "NEAR"
       ? await sendNear(account, to, base)

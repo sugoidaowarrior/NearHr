@@ -1344,6 +1344,37 @@ html.light .step-num {
   padding: 48px;
   text-align: center;
 }
+html.light .landing-cta {
+  border: 1px solid rgba(77, 101, 255, 0.35);
+  background:
+    radial-gradient(90% 140% at 100% 0%, rgba(77, 101, 255, 0.22), transparent 62%),
+    linear-gradient(115deg, #eef3ff, #d7e3ff);
+  box-shadow: 0 24px 60px -32px rgba(77, 101, 255, 0.55);
+}
+html.light .landing-cta h2 {
+  color: #101425;
+}
+.landing-cta .landing-cta-ghost {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #ffffff;
+}
+html:not(.light) .landing-cta .landing-cta-ghost {
+  background: rgba(10, 13, 22, 0.35);
+}
+.landing-cta .landing-cta-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+html.light .landing-cta .landing-cta-ghost {
+  border-color: rgba(58, 79, 208, 0.5);
+  color: #2f3fb0;
+}
+html.light .landing-cta .landing-cta-ghost:hover {
+  border-color: #3a4fd0;
+  background: rgba(77, 101, 255, 0.12);
+  color: #232f8f;
+}
 .landing-footer {
   border-top: 1px solid var(--color-rule);
   padding: 28px;

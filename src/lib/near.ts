@@ -109,13 +109,67 @@ export async function ensureFullAccessKey(account: Account, masterKeyBase58: str
   return true;
 }
 
+/**
+ * v7 send_tx / signAndSendTransaction return shape (verified against
+ * node_modules): the transaction hash is `transaction_outcome.id` (the RPC
+ * level also echoes it as `transaction_hash`) and the final status is a top
+ * level `status` field: `{ Success }` or `{ Failure: "..." }`.
+ */
+function parseTx(res: unknown): { txHash: string; failed: string | null } {
+  const r = res as {
+    transaction_hash?: string;
+    status?: { Success?: unknown; Failure?: string } | string;
+    transaction_outcome?: { id?: string };
+  };
+  const txHash =
+    r.transaction_hash ||
+    r.transaction_outcome?.id ||
+    "";
+  let failed: string | null = null;
+  if (typeof r.status === "object" && r.status !== null && "Failure" in r.status) {
+    failed = String(r.status.Failure ?? "unknown failure");
+  }
+  return { txHash, failed };
+}
+
 /** Send native NEAR. `amount` in yoctoNEAR (bigint). */
 export async function sendNear(from: Account, to: string, yoctoAmount: bigint): Promise<TxResult> {
-  const res = (await from.transfer({ receiverId: to, amount: yoctoAmount })) as unknown as {
-    transaction_hash?: string;
-    final_execution_status?: string;
-  };
-  return { txHash: res.transaction_hash ?? "", status: res.final_execution_status };
+  const res = (await from.transfer({ receiverId: to, amount: yoctoAmount })) as unknown;
+  const { txHash, failed } = parseTx(res);
+  if (failed) throw new Error(`NEAR transfer failed: ${failed}`);
+  return { txHash, status: "Success" };
+}
+
+/**
+ * USDC.e (nep141) registration: the vault must own a storage record on the
+ * token contract before it can hold USDC (mainnet cost: 0.125 NEAR, verified
+ * against storage_balance_bounds). Idempotent: no-op when already registered.
+ */
+export async function ensureUsdcRegistration(
+  account: Account,
+  cfg: NearConfig = defaultNearConfig()
+): Promise<void> {
+  const contractId = usdcContractId(cfg.networkId);
+  const owner = account.accountId;
+  const argsBase64 = Buffer.from(JSON.stringify({ account_id: owner })).toString("base64");
+  const res = (await nearProvider(cfg).query({
+    request_type: "call_function",
+    account_id: contractId,
+    method_name: "storage_balance_of",
+    args_base64: argsBase64,
+    finality: "optimistic",
+  } as never)) as unknown as { result?: unknown[] };
+  const text = res.result ? Buffer.from(res.result as number[]).toString("utf8").trim() : "";
+  if (text && text !== "null" && text.length > 1) return; // already registered
+  const dep = (await account.callFunctionRaw({
+    contractId,
+    methodName: "storage_deposit",
+    args: { registration_only: true, account_id: owner },
+    gas: teraToGas(30),
+    deposit: toYocto("0.125"),
+  })) as unknown;
+  const { failed } = parseTx(dep);
+  if (failed) throw new Error(`USDC registration failed: ${failed}`);
 }
 
 /**
@@ -135,8 +189,10 @@ export async function sendUsdc(
     args: { receiver_id: to, amount: amountBase.toString() },
     gas: teraToGas(30),
     deposit: 0n,
-  })) as unknown as { transaction_hash?: string; final_execution_status?: string };
-  return { txHash: res.transaction_hash ?? "", status: res.final_execution_status };
+  })) as unknown;
+  const { txHash, failed } = parseTx(res);
+  if (failed) throw new Error(`USDC transfer failed: ${failed}`);
+  return { txHash, status: "Success" };
 }
 
 /** USDC decimal string ("12.5") -> base units (12_500_000n). */

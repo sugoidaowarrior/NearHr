@@ -1,4 +1,4 @@
-# HushPay
+# NearHr
 
 Private payroll on NEAR — a simple, custodial smart-account wallet.
 Log in with Google, back up with a second email, and pay up to 50 people per
@@ -70,7 +70,7 @@ joe@x.com,Joe,250.5,,sip:near:0x...:0x...,shielded
 
 ```
 data/kms.key            server master key (auto-generated, mode 0600, gitignored)
-data/hushpay.db         SQLite: users, sessions, vaults, payroll runs/items
+data/hushpay.db         SQLite: users, sessions, vaults, payroll runs/items (file name kept for backward compatibility)
 ```
 
 Per-employer vault = AES-256-GCM envelope:

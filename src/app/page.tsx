@@ -347,7 +347,7 @@ export default function Home() {
             <Link href="/api/auth/google/start" className="btn btn-primary">
               Open your wallet
             </Link>
-            <Link href="/login" className="btn btn-ghost !border-white/25 !text-white hover:!border-white/60 hover:!bg-white/10 hover:!text-white">
+            <Link href="/login" className="btn btn-ghost landing-cta-ghost">
               Sign in
             </Link>
           </div>

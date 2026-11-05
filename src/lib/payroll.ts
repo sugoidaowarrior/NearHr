@@ -24,6 +24,7 @@ import {
   sendUsdc,
   toYocto,
   usdcToBase,
+  ensureUsdcRegistration,
   NearConfig,
   defaultNearConfig,
 } from "./near";
@@ -281,6 +282,7 @@ export interface ExecuteResult {
 export async function executeRun(
   runId: string,
   vault: { nearMasterKey: string; nearAccount: string },
+  expectedEmployerId: string,
   cfg: NearConfig = defaultNearConfig()
 ): Promise<ExecuteResult> {
   const db = getDb();
@@ -288,6 +290,12 @@ export async function executeRun(
     | Record<string, unknown>
     | undefined;
   if (!run) throw new Error("run not found");
+  // Ownership: a run belongs to the employer that created it. The session
+  // user's id must match, or any authenticated employer could read or
+  // execute someone else's payroll run (IDOR).
+  if (String(run.employer_id) !== String(expectedEmployerId)) {
+    throw new Error("run not found");
+  }
   if (run.status === "executing") throw new Error("run already executing");
   if (run.status === "done" || run.status === "failed")
     throw new Error(`run already finished (${run.status})`);
@@ -297,6 +305,11 @@ export async function executeRun(
   const account = accountFromVault(vault.nearAccount, vault.nearMasterKey);
   const asset = String(run.asset);
   const employerId = String(run.employer_id);
+  if (asset === "USDC") {
+    // One-time USDC.e storage registration for the vault (0.125 NEAR,
+    // idempotent) so the first ft_transfer in the run cannot fail.
+    await ensureUsdcRegistration(account, cfg);
+  }
   const results: ExecuteResult["results"] = [];
   let executed = 0;
   let failed = 0;
@@ -375,7 +388,7 @@ export async function executeRun(
     }
   }
 
-  const finalStatus = failed === 0 ? "done" : executed > 0 ? "done" : "failed";
+  const finalStatus = failed === 0 ? "done" : executed > 0 ? "partial" : "failed";
   db.prepare(
     `UPDATE payroll_runs SET status=?, executed_at=datetime('now'), near_ref=? WHERE id=?`
   ).run(finalStatus, results.map((r) => r.txRef).filter(Boolean).slice(-1)[0] ?? "", runId);

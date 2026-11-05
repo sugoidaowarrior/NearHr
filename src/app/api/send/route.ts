@@ -9,13 +9,11 @@ import { isPrivacyLevel, derivePayrollDestination, PrivacyLevel } from "@/lib/pr
  * Resolve the on chain destination for a one off send given a privacy level.
  *  - transparent: straight to the recipient's wallet.
  *  - shielded / compliant: fund a one time SIP stealth implicit account derived
- *    from the recipient's meta address. The recipient (a registered NearHr user)
- *    claims it from their device. Only valid for registered recipients because
- *    the claim needs their viewing key, and USDC must land on a registered
- *    account (a fresh implicit wallet cannot hold USDC).
+ *    from the RECIPIENT's meta address (stored in their encrypted vault). Only
+ *    a registered NearHr recipient can claim it, because the claim needs their
+ *    spending key, and USDC must land on a registered account.
  */
 function resolveSendDestination(
-  employerId: string,
   to: string,
   privacy: PrivacyLevel,
   asset: PaymentAsset
@@ -23,22 +21,31 @@ function resolveSendDestination(
   const t = to.trim().toLowerCase();
   if (privacy === "transparent") return { dest: t, destKind: "wallet", recipientName: null };
 
+  // Find the registered NearHr recipient by NEAR account or email.
   const row = getDb()
     .prepare(
-      `SELECT u.name, v.sip_meta_address
-       FROM users u JOIN vaults v ON v.user_id = u.id
+      `SELECT u.id, u.name FROM users u JOIN vaults v ON v.user_id = u.id
        WHERE v.near_account = ? OR lower(u.email) = ? LIMIT 1`
     )
-    .get(t, t) as { name: string; sip_meta_address: string | null } | undefined;
-
-  if (!row?.sip_meta_address) {
+    .get(t, t) as { id: string; name: string } | undefined;
+  if (!row) {
     throw new Error(
       asset === "USDC"
         ? "shielded USDC sends need a registered NearHr recipient who can claim the stealth payout"
         : "shielded sends need the recipient to be a registered NearHr account"
     );
   }
-  const dest = derivePayrollDestination(row.sip_meta_address).implicitAccountId;
+  // The recipient's SIP stealth meta address lives in their encrypted vault
+  // record (custodial server KEK). Derive a one time stealth destination that
+  // only that recipient can claim.
+  let meta = "";
+  try {
+    meta = (unlockVault(row.id).sipMetaAddress ?? "").trim();
+  } catch {
+    meta = "";
+  }
+  if (!meta) throw new Error("could not read the recipient's stealth key");
+  const dest = derivePayrollDestination(meta).implicitAccountId;
   if (!isNearAccount(dest)) throw new Error("could not derive a stealth destination");
   return { dest, destKind: privacy === "compliant" ? "stealth-audit" : "stealth", recipientName: row.name };
 }
@@ -76,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   let dest: { dest: string; destKind: string; recipientName: string | null };
   try {
-    dest = resolveSendDestination(userId, String(body.to), privacy, asset);
+    dest = resolveSendDestination(String(body.to), privacy, asset);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
   }

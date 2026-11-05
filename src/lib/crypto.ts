@@ -21,7 +21,8 @@ const PBKDF2_ITERATIONS = 210_000;
 const SALT_LEN = 16;
 const IV_LEN = 12;
 const KEY_LEN = 32;
-const FORMAT = "hushpay.vault.v1";
+const FORMAT = "nearhr.vault.v1";
+const FORMAT_LEGACY = "hushpay.vault.v1"; // pre rename, accepted on decrypt only
 
 /** Server master key, 64 hex chars (32 bytes). Generated on first run (see db.ts).
  *  Read from disk on demand — the file is the source of truth (see kms()). */
@@ -107,7 +108,7 @@ export function encryptVault(plain: VaultPlaintext, passphrase: string): string 
 /** Decrypt a vault record with the passphrase. Throws on wrong passphrase. */
 export function decryptVault(record: string | VaultRecord, passphrase: string): VaultPlaintext {
   const r: VaultRecord = typeof record === "string" ? JSON.parse(record) : record;
-  if (r.v !== FORMAT) throw new Error(`unknown vault format: ${r.v}`);
+  if (r.v !== FORMAT && r.v !== FORMAT_LEGACY) throw new Error(`unknown vault format: ${r.v}`);
   const salt = Buffer.from(r.salt, "base64");
   const kek = deriveKey(passphrase, salt);
   let dek: Buffer;

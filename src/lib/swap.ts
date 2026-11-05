@@ -235,12 +235,22 @@ export async function quoteSwap(
 
 /* ----------------------------- execution ------------------------------ */
 
-type TxRes = { transaction_hash?: string; final_execution_status?: string };
-
-function isFailure(status?: string): string | null {
-  if (!status) return null; // unknown: treat as submitted, do not declare success
-  if (status === "Success" || status.startsWith('{"Success"')) return null;
-  return status;
+/**
+ * v7 send_tx return shape (verified): hash = transaction_outcome.id (also
+ * echoed as transaction_hash), final status = top level `status`.
+ */
+function parseTx(res: unknown): { txHash: string; failed: string | null } {
+  const r = res as {
+    transaction_hash?: string;
+    status?: { Success?: unknown; Failure?: string } | string;
+    transaction_outcome?: { id?: string };
+  };
+  const txHash = r.transaction_hash || r.transaction_outcome?.id || "";
+  let failed: string | null = null;
+  if (typeof r.status === "object" && r.status !== null && "Failure" in r.status) {
+    failed = String(r.status.Failure ?? "unknown failure");
+  }
+  return { txHash, failed };
 }
 
 async function call(
@@ -257,21 +267,12 @@ async function call(
     args,
     gas,
     deposit,
-  })) as unknown as TxRes;
-  const fail = isFailure(res.final_execution_status);
-  if (fail) {
-    throw new Error(`transaction ${methodName} failed: ${humanizeStatus(fail)}`);
+  })) as unknown;
+  const { txHash, failed } = parseTx(res);
+  if (failed) {
+    throw new Error(`transaction ${methodName} failed: ${failed}`);
   }
-  return res.transaction_hash ?? "";
-}
-
-function humanizeStatus(s: string): string {
-  try {
-    const o = JSON.parse(s);
-    return o.Failure ?? o.Error ?? s;
-  } catch {
-    return s.length > 200 ? s.slice(0, 200) + "…" : s;
-  }
+  return txHash;
 }
 
 /** Register the account on a token (0.125 NEAR) only if not already registered. */

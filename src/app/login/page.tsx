@@ -36,8 +36,18 @@ export default async function Login({
 
       <div className="flex min-h-screen flex-col items-center justify-center px-5 py-10">
         <div className="mb-6 w-full max-w-md">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="mx-auto h-12 w-auto rounded-xl object-contain" />
+          <svg viewBox="0 0 260 64" role="img" aria-label="NearHr payroll on NEAR" className="mx-auto h-16 w-auto">
+            <defs>
+              <linearGradient id="nearhr-tile" x1="0" y1="0" x2="1" y2="1">
+                <stop stopColor="#4d65ff" />
+                <stop offset="1" stopColor="#0082f3" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#nearhr-tile)" />
+            <text x="32" y="44" textAnchor="middle" fontSize="34" fontWeight="800" fill="#ffffff" fontFamily="ui-sans-serif, system-ui, sans-serif">N</text>
+            <text x="74" y="34" fontSize="27" fontWeight="800" fill="currentColor" fontFamily="ui-sans-serif, system-ui, sans-serif">NearHr</text>
+            <text x="75" y="52" fontSize="10" letterSpacing="3" fontWeight="700" fill="#4d65ff" fontFamily="ui-sans-serif, system-ui, sans-serif">PAYROLL ON NEAR</text>
+          </svg>
         </div>
         <div className="w-full max-w-md">
           <div className="glass p-7 sm:p-9">

@@ -1505,9 +1505,11 @@ export default function Dashboard() {
                               ? "pill-green"
                               : r.status === "executing"
                                 ? "pill-warn"
-                                : r.status === "failed"
-                                  ? "pill-danger"
-                                  : "pill-muted"
+                                : r.status === "partial"
+                                  ? "pill-warn"
+                                  : r.status === "failed"
+                                    ? "pill-danger"
+                                    : "pill-muted"
                           }`}
                         >
                           {r.status}

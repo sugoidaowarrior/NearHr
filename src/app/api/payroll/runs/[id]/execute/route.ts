@@ -29,10 +29,14 @@ export async function POST(
   }
 
   try {
-    const result = await executeRun(id, {
-      nearMasterKey: vault.nearMasterKey,
-      nearAccount: vault.nearAccount,
-    });
+    const result = await executeRun(
+      id,
+      {
+        nearMasterKey: vault.nearMasterKey,
+        nearAccount: vault.nearAccount,
+      },
+      userId
+    );
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
