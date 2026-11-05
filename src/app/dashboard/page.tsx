@@ -1116,7 +1116,7 @@ export default function Dashboard() {
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("NEAR")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
                 <span className="pill pill-muted">native</span>
-                <span className="mono text-[var(--color-faint)]">{prices ? `= ${F.fmt(F.fromUsd(nearAmt * prices.NEAR))}` : "…"}</span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `${F.fmt(F.fromUsd(prices.NEAR))} / NEAR · = ${F.fmt(F.fromUsd(nearAmt * prices.NEAR))}` : "…"}</span>
               </div>
               <Sparkline points={spark(1)} color="#4d65ff" />
             </div>
@@ -1139,7 +1139,7 @@ export default function Dashboard() {
               <div className="mt-2 mono text-2xl font-bold tracking-tight">{balanceLoading ? "…" : assetOf("USDC")}</div>
               <div className="mt-1 flex items-center gap-2 text-xs">
                 <span className="pill pill-muted">stable</span>
-                <span className="mono text-[var(--color-faint)]">{prices ? `= ${F.fmt(F.fromUsd(usdcAmt * prices.USDC))}` : "…"}</span>
+                <span className="mono text-[var(--color-faint)]">{prices ? `${F.fmt(F.fromUsd(prices.USDC))} / USDC · = ${F.fmt(F.fromUsd(usdcAmt * prices.USDC))}` : "…"}</span>
               </div>
               <Sparkline points={spark(2)} color="#0082f3" />
             </div>
