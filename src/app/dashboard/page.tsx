@@ -1672,12 +1672,11 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
     setQuote(null);
     setIntents(null);
     setQuoteErr("");
-    if (!hasAmt) {
-      setQuoteLoading(false);
-      return;
-    }
+    // Always quote (1 unit when the field is empty) so the live rate shows the
+    // moment the modal opens, not only after typing an amount.
+    const qAmt = hasAmt ? amount : "1";
     setQuoteLoading(true);
-    api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(amount)}&slippage=${slippage}`)
+    api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(qAmt)}&slippage=${slippage}`)
       .then((d) => {
         if (!live) return;
         setQuote({ expectedOut: d.expectedOut, minOut: d.minOut, rate: Number(d.rate), poolId: d.poolId, slippage: d.slippage });
@@ -1768,11 +1767,11 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
       <div className="card-2 p-3.5">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
           <span>You receive</span>
-          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {usdValue(toAsset, quote ? Number(quote.expectedOut) : 0) || "…"}</span>
+          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {hasAmt && quote ? usdValue(toAsset, Number(quote.expectedOut)) || "…" : "…"}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="mono min-w-0 flex-1 truncate text-3xl font-bold text-[var(--color-faint)]">
-            {quoteLoading ? "…" : quote ? quote.expectedOut : "0.00"}
+            {quoteLoading ? "…" : hasAmt && quote ? quote.expectedOut : "0.00"}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] px-3 py-1.5 text-sm font-bold">
             <TokenIcon asset={toAsset} size={20} />
@@ -1805,7 +1804,7 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
         </span>
       </div>
 
-      {quote && (
+      {hasAmt && quote && (
         <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
           <div className="card-2 px-4 py-2.5">
             <div className="text-[var(--color-faint)]">Expected</div>
