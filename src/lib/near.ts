@@ -55,8 +55,71 @@ export function defaultNearConfig(): NearConfig {
     networkId: network,
     nodeUrl:
       env.NEAR_NODE_URL ||
-      (network === "mainnet" ? "https://rpc.mainnet.near.org" : "https://rpc.testnet.near.org"),
+      (network === "mainnet" ? "https://free.rpc.fastnear.com" : "https://rpc.testnet.near.org"),
   };
+}
+
+/**
+ * RPC failover order. rpc.mainnet.near.org is deprecated and rate limited
+ * (it 429s and warns to switch), so it stays only as the last resort.
+ */
+export function rpcCandidates(network: string): string[] {
+  if (network !== "mainnet") return ["https://rpc.testnet.near.org"];
+  return [
+    "https://free.rpc.fastnear.com",
+    "https://rpc.mainnet.fastnear.com",
+    "https://rpc.mainnet.near.org",
+  ];
+}
+
+/** One provider per URL (keep alive connections, no repeated TLS handshakes). */
+const providerByUrl = new Map<string, JsonRpcProvider>();
+function providerFor(url: string): JsonRpcProvider {
+  let p = providerByUrl.get(url);
+  if (!p) {
+    p = new JsonRpcProvider({ url });
+    providerByUrl.set(url, p);
+  }
+  return p;
+}
+
+/**
+ * Raw view call with automatic RPC failover. Network, rate limit and bad
+ * response errors fall through to the next endpoint; deterministic on chain
+ * errors are returned as-is (retrying another node would return the same
+ * error and just burn time).
+ */
+export async function rawViewFailover(
+  accountId: string,
+  method: string,
+  args: Record<string, unknown>
+): Promise<string> {
+  const cfg = defaultNearConfig();
+  const urls = Array.from(new Set([cfg.nodeUrl, ...rpcCandidates(cfg.networkId)]));
+  let lastErr: unknown = null;
+  for (const url of urls) {
+    try {
+      const res = (await providerFor(url).query({
+        request_type: "call_function",
+        account_id: accountId,
+        method_name: method,
+        args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
+        finality: "optimistic",
+      } as never)) as unknown as { error?: string; result?: unknown[] };
+      if (typeof res?.error === "string") return res.error;
+      if (Array.isArray(res?.result)) return Buffer.from(res.result as number[]).toString("utf8");
+      throw new Error(`view ${method} returned no result`);
+    } catch (e) {
+      // Deterministic on chain failures (wasm execution errors, panics) are
+      // the same on every node: fail fast instead of burning the failover chain.
+      const name = e instanceof Error ? e.name : "";
+      if (name === "ContractExecutionError" || /wasm execution failed|reverted|panicked/i.test(String(e))) {
+        throw e;
+      }
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 let provider: JsonRpcProvider | null = null;
@@ -151,15 +214,12 @@ export async function ensureUsdcRegistration(
 ): Promise<void> {
   const contractId = usdcContractId(cfg.networkId);
   const owner = account.accountId;
-  const argsBase64 = Buffer.from(JSON.stringify({ account_id: owner })).toString("base64");
-  const res = (await nearProvider(cfg).query({
-    request_type: "call_function",
-    account_id: contractId,
-    method_name: "storage_balance_of",
-    args_base64: argsBase64,
-    finality: "optimistic",
-  } as never)) as unknown as { result?: unknown[] };
-  const text = res.result ? Buffer.from(res.result as number[]).toString("utf8").trim() : "";
+  let text = "";
+  try {
+    text = (await rawViewFailover(contractId, "storage_balance_of", { account_id: owner })).trim();
+  } catch {
+    text = "";
+  }
   if (text && text !== "null" && text.length > 1) return; // already registered
   const dep = (await account.callFunctionRaw({
     contractId,
@@ -213,19 +273,13 @@ export async function balanceOf(account: Account): Promise<bigint> {
  */
 export async function usdcBalanceOf(owner: string, cfg: NearConfig = defaultNearConfig()): Promise<bigint> {
   const contractId = usdcContractId(cfg.networkId);
-  const argsBase64 = Buffer.from(JSON.stringify({ account_id: owner })).toString("base64");
-  const res = (await nearProvider(cfg).query({
-    request_type: "call_function",
-    account_id: contractId,
-    method_name: "ft_balance_of",
-    args_base64: argsBase64,
-    finality: "optimistic",
-  } as never)) as unknown as { result?: unknown[] };
-
-  // call_function returns raw bytes of the method's serialized return value.
-  const bytes = res.result;
-  if (!bytes || !Array.isArray(bytes) || bytes.length === 0) return 0n;
-  const text = Buffer.from(bytes as number[]).toString("utf8").trim();
+  let text = "";
+  try {
+    text = (await rawViewFailover(contractId, "ft_balance_of", { account_id: owner })).trim();
+  } catch {
+    return 0n;
+  }
+  if (!text) return 0n;
   let amount = "0";
   if (text.startsWith("{")) {
     // e.g. {"amount":"1000"}

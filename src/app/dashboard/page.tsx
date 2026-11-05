@@ -653,6 +653,12 @@ export default function Dashboard() {
   useEffect(() => {
     loadFast();
     loadBalance();
+    // Warm the swap pool cache in the background so the swap modal's first
+    // quote never waits on a cold pool scan.
+    const t = setTimeout(() => {
+      api("/api/swap?from=NEAR&to=USDC&amount=1&slippage=0.5").catch(() => null);
+    }, 1200);
+    return () => clearTimeout(t);
   }, [loadFast, loadBalance]);
 
   const refreshAll = useCallback(async () => {
@@ -1664,33 +1670,50 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
   const amtNum = Number(amount);
   const hasAmt = amtNum > 0;
 
+  // Instant estimate from the last known rate, shown while the exact on chain
+  // quote is still in flight so the number never freezes while typing.
+  const previewOut = hasAmt && quote ? amtNum * quote.rate : null;
+  const fmtPreview = (n: number) => String(Number(n.toFixed(4)));
+
   const usdValue = (asset: "NEAR" | "USDC", amt: number) =>
     prices ? usd(amt * (asset === "NEAR" ? prices.NEAR : prices.USDC)) : null;
 
+  // Flipping direction invalidates the rate; reset only then. Amount changes
+  // keep the stale quote visible (it powers the instant estimate above).
   useEffect(() => {
-    let live = true;
     setQuote(null);
     setIntents(null);
     setQuoteErr("");
+  }, [fromAsset, toAsset]);
+
+  useEffect(() => {
+    let live = true;
     // Always quote (1 unit when the field is empty) so the live rate shows the
-    // moment the modal opens, not only after typing an amount.
+    // moment the modal opens. Debounced while typing so each keystroke does
+    // not burn a round trip to mainnet.
     const qAmt = hasAmt ? amount : "1";
     setQuoteLoading(true);
-    api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(qAmt)}&slippage=${slippage}`)
-      .then((d) => {
-        if (!live) return;
-        setQuote({ expectedOut: d.expectedOut, minOut: d.minOut, rate: Number(d.rate), poolId: d.poolId, slippage: d.slippage });
-        setIntents(d.intents ? { expectedOut: d.intents.expectedOut, minOut: d.intents.minOut, rate: Number(d.intents.rate) } : null);
-        setQuoteErr("");
-      })
-      .catch((e) => {
-        if (live) setQuoteErr(e.message || "could not fetch a quote");
-      })
-      .finally(() => {
-        if (live) setQuoteLoading(false);
-      });
+    const t = window.setTimeout(
+      () => {
+        api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(qAmt)}&slippage=${slippage}`)
+          .then((d) => {
+            if (!live) return;
+            setQuote({ expectedOut: d.expectedOut, minOut: d.minOut, rate: Number(d.rate), poolId: d.poolId, slippage: d.slippage });
+            setIntents(d.intents ? { expectedOut: d.intents.expectedOut, minOut: d.intents.minOut, rate: Number(d.intents.rate) } : null);
+            setQuoteErr("");
+          })
+          .catch((e) => {
+            if (live) setQuoteErr(e.message || "could not fetch a quote");
+          })
+          .finally(() => {
+            if (live) setQuoteLoading(false);
+          });
+      },
+      hasAmt ? 350 : 0
+    );
     return () => {
       live = false;
+      window.clearTimeout(t);
     };
   }, [fromAsset, toAsset, amount, slippage, hasAmt]);
 
@@ -1767,11 +1790,13 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
       <div className="card-2 p-3.5">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
           <span>You receive</span>
-          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {hasAmt && quote ? usdValue(toAsset, Number(quote.expectedOut)) || "…" : "…"}</span>
+          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {hasAmt && (quoteLoading && previewOut ? usdValue(toAsset, previewOut) || "…" : quote ? usdValue(toAsset, Number(quote.expectedOut)) || "…" : "…")}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="mono min-w-0 flex-1 truncate text-3xl font-bold text-[var(--color-faint)]">
-            {quoteLoading ? "…" : hasAmt && quote ? quote.expectedOut : "0.00"}
+            {hasAmt && quoteLoading && previewOut ? (
+              <span className="opacity-70">{fmtPreview(previewOut)}<span className="text-[11px] font-medium"> …</span></span>
+            ) : quoteLoading ? "…" : hasAmt && quote ? quote.expectedOut : "0.00"}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] px-3 py-1.5 text-sm font-bold">
             <TokenIcon asset={toAsset} size={20} />
@@ -1804,7 +1829,7 @@ function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: (
         </span>
       </div>
 
-      {hasAmt && quote && (
+      {hasAmt && quote && !quoteLoading && (
         <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
           <div className="card-2 px-4 py-2.5">
             <div className="text-[var(--color-faint)]">Expected</div>

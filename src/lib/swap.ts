@@ -19,6 +19,7 @@ import {
   balanceOf,
   defaultNearConfig,
   nearProvider,
+  rawViewFailover,
   toYocto,
   usdcToBase,
   usdcBalanceOf,
@@ -73,15 +74,7 @@ async function rawView(
   method: string,
   args: Record<string, unknown>
 ): Promise<string> {
-  const cfg = defaultNearConfig();
-  const res = (await nearProvider(cfg).query({
-    request_type: "call_function",
-    account_id: accountId,
-    method_name: method,
-    args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
-    finality: "optimistic",
-  } as never)) as unknown as NearViewRes;
-  return Buffer.from((res.result ?? []) as number[]).toString("utf8");
+  return rawViewFailover(accountId, method, args);
 }
 
 /** ft_balance_of -> bigint base units (0 if absent). */
@@ -113,10 +106,17 @@ async function isRegistered(token: string, owner: string): Promise<boolean> {
 
 /** Deepest valid wNEAR/USDC.e pool, chosen live. Cached briefly. */
 let poolCache: { poolId: number; at: number } | null = null;
-const POOL_TTL_MS = 120_000;
+let poolScan: Promise<number> | null = null;
+const POOL_TTL_MS = 300_000;
 
 export async function findUsdcWnearPool(): Promise<number> {
   if (poolCache && Date.now() - poolCache.at < POOL_TTL_MS) return poolCache.poolId;
+  // Single-flight: concurrent quote requests share one scan.
+  if (!poolScan) poolScan = scanPools().finally(() => { poolScan = null; });
+  return poolScan;
+}
+
+async function scanPools(): Promise<number> {
   const raw = await rawView(REF_CONTRACT, "get_number_of_pools", {});
   const total = Number(raw.replace(/[^0-9]/g, "") || "0");
   if (!total) throw new Error("swap pool list unavailable");
