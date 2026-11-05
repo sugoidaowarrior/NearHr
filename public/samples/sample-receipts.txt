@@ -1,0 +1,44 @@
+=== RECEIPT 1 ===
+Harbor Books
+12 Wharf Lane
+2026-10-06
+Paperback novel                    14.99
+Hardcover novel                     24.50
+Espresso (large)                     4.75
+Tax                                 3.36
+TOTAL                              47.60
+Cashier: M. Okafor
+
+=== RECEIPT 2 ===
+Metro Fuel Station #4
+2026-10-11
+Diesel 18.42 L @ 1.680             30.95
+Car wash                            8.00
+TOTAL                              38.95
+
+=== RECEIPT 3 ===
+Velvet Room Nightclub
+2026-10-15
+Table minimum                      95.00
+Bottle service                    180.00
+Cover charge (x2)                   30.00
+TOTAL                             305.00
+Card ending 3333
+
+=== RECEIPT 4 ===
+Bright Health Clinic
+2026-10-18
+Consultation fee                   90.00
+Lab panel (full)                   75.00
+TOTAL                             165.00
+Insurance paid 120.00 / you owe 45.00
+
+=== RECEIPT 5 ===
+Skylift Airlines
+2026-10-28
+Economy ticket LHR to JNB         342.50
+Baggage (2x23kg)                    45.00
+TOTAL                             387.50
+PNR: FICT123
+
+All merchants, amounts and people above are fictional.

@@ -24,6 +24,10 @@ to exercise for the first time.
     the employee can claim it. Payer-to-recipient is not linked on-chain.
   - `compliant` — shielded, plus a viewing key so an auditor can verify every
     payment was made without exposing who received it.
+- **Private expense audit** — paste a bank statement or upload receipts and a
+  model hosted inside a **trusted execution environment on NEAR AI Cloud**
+  categorizes the spending and flags what looks unusual. The app proves the
+  analysis ran in the TEE before showing a result. [How it is verified](#private-expense-audit-tee-verified).
 
 ## Quickstart
 
@@ -65,6 +69,41 @@ joe@x.com,Joe,250.5,,sip:near:0x...:0x...,shielded
 | `npx tsc --noEmit` | Type-check |
 | `npx tsx scripts/smoke.mjs` | Offline test: vault crypto, SIP stealth round-trip, CSV parser, NEAR/USDC math |
 | `npx tsx scripts/e2e-seed.mjs` | Seed a test employer + session token for the API |
+
+## Private expense audit (TEE verified)
+
+The dashboard's **Audit** action (rail or quick actions) opens the private
+expense auditor. It is built for the NEAR AI Cloud hackathon, Privacy and
+Private AI track, and satisfies the track requirements directly:
+
+1. **OpenAI-compatible API on NEAR AI Cloud.** `src/app/api/audit/route.ts`
+   talks to `https://cloud-api.near.ai/v1` (key in `.env.local`) and chooses a
+   TEE-hosted model listed by the `/models` endpoint.
+2. **Attestation with a fresh random nonce, verified end to end.** Every audit
+   mints a fresh 32-byte nonce, fetches `/attestation/report` for the chosen
+   model, and checks it the way the NEAR AI Cloud verification docs describe:
+   the TEE node echoes our exact nonce, an Intel TDX quote is present, the
+   NVIDIA GPU evidence is verified through **NVIDIA NRAS** (secure boot on,
+   debug disabled, nonce match, overall result true), and the **ECDSA
+   signature** on the completion recovers to the attested model TEE address
+   with the signed request and response hashes matching our exact bytes. The
+   UI shows a **Verified** panel listing every check.
+3. **Nothing is kept server-side after a response returns.** The document text
+   exists only inside the single HTTPS request to NEAR AI Cloud and in the
+   memory of the process until the response is sent. There is no database, no
+   uploads folder, no disk write, and no log that contains the document. Only
+   metadata (model name, chat id, hashes) is ever recorded. The same promise
+   is written in the source comments at the top of
+   `src/app/api/audit/route.ts` and repeated in the UI footer.
+4. **Fictional sample documents.** `public/samples/sample-statement.txt` and
+   `public/samples/sample-receipts.txt` are made up, so anyone can run a full
+   audit without real data.
+
+**Demo mode (temporary).** Until NEAR AI Cloud credits are added, `.env.local`
+may set `FORTYTWO_API_KEY`, which routes the *completion* to an external
+OpenAI-compatible model so local development works. The TEE attestation
+pipeline still runs live and is displayed, but the answer is clearly marked
+**Not verified (demo)** and this mode must be removed before submission.
 
 ## How keys are held
 
@@ -124,7 +163,8 @@ type-checked, but treat it as unverified until one real testnet run.
 ```
 src/lib/        crypto · db · near · privacy · vault · google · sessions · payroll
 src/app/api/    auth/google/{start,callback} · logout · me · vault(+backup/claim/restore) ·
-                payroll(+preview/runs/[id]/[id]/execute) · balance
-src/app/        page (landing) · login · dashboard (Wallet / New payroll / Runs / Backup)
+                payroll(+preview/runs/[id]/[id]/execute) · balance · swap · audit
+src/app/        page (landing) · login · dashboard (Wallet / New payroll / Runs / Backup / Audit)
 scripts/        smoke.mjs (offline) · e2e-seed.mjs (test session)
+public/samples/ fictional statement + receipts for the expense auditor
 ```

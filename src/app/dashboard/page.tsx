@@ -570,6 +570,7 @@ export default function Dashboard() {
   const [empModal, setEmpModal] = useState<null | { editing: Employee | null }>(null);
   const [payrollOpen, setPayrollOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [empPrivacy, setEmpPrivacy] = useState<"all" | "transparent" | "shielded" | "compliant">("all");
@@ -917,6 +918,12 @@ export default function Dashboard() {
             <path d="M7 8h13l-3-3M17 16H4l3 3" />
           </svg>
         </button>
+        <button className="rail-btn" title="Audit spending" onClick={() => setAuditOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+        </button>
         <div className="rail-spacer" />
         <button className="rail-btn" title="Sign out" onClick={signOut}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1218,6 +1225,7 @@ export default function Dashboard() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setSendOpen(true)}>Send</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setReceiveOpen(true)}>Receive</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setSwapOpen(true)}>Swap</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setAuditOpen(true)}>Audit</button>
                 </div>
                 <div className="mt-4 border-t border-[var(--color-rule)] pt-4">
                   <div className="mb-2.5 flex items-center justify-between text-xs text-[var(--color-faint)]">
@@ -1626,6 +1634,7 @@ export default function Dashboard() {
           }}
         />
       )}
+      {auditOpen && <AuditModal onClose={() => setAuditOpen(false)} />}
       {empModal && (
         <EmployeeModal
           employee={empModal.editing}
@@ -2324,6 +2333,355 @@ function PayrollModal({
           </button>
         </div>
       )}
+    </Modal>
+  );
+}
+
+type AuditCheck = { name: string; pass: boolean | null; detail?: string };
+type AuditResult = {
+  demo: boolean;
+  demoProvider: string | null;
+  demoModel: string | null;
+  verified: boolean;
+  allPass: boolean;
+  signatureVerified: boolean;
+  model: string;
+  attestedModel: string;
+  nonce: string;
+  chatId: string;
+  checks: AuditCheck[];
+  attestation: {
+    modelAddress: string | null;
+    gatewayAddress: string | null;
+    nodeCount: number;
+    intelQuotePresent: boolean;
+    gpuSummary: string[];
+  };
+  signature: { kind: string | null; recovered: string | null };
+  requestHash: string;
+  responseHash: string;
+  report: any;
+  rawReply: string | null;
+};
+
+function AuditModal({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState("");
+  const [model, setModel] = useState("deepseek-ai/DeepSeek-V4.1-Flash-1017");
+  const [models, setModels] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<AuditResult | null>(null);
+  const [demo, setDemo] = useState(false);
+  const [demoModel, setDemoModel] = useState<string | null>(null);
+  const [demoProvider, setDemoProvider] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api("/api/audit")
+      .then((d) => {
+        d.models?.length && setModels(d.models);
+        setDemo(Boolean(d.demo));
+        setDemoModel(d.demoModel ?? null);
+        setDemoProvider(d.demoProvider ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadSample = (kind: "statement" | "receipts") => {
+    fetch(`/samples/sample-${kind}.txt`)
+      .then((r) => r.text())
+      .then((t) => {
+        setText(t);
+        setError("");
+        setResult(null);
+      })
+      .catch(() => setError("Could not load the sample."));
+  };
+
+  const onFile = (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 400 * 1024) {
+      setError("Please keep files under 400 KB (a few pages).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setText(String(reader.result ?? ""));
+      setError("");
+      setResult(null);
+    };
+    reader.onerror = () => setError("Could not read that file. Try a .txt, .csv or .md file.");
+    reader.readAsText(f);
+  };
+
+  const audit = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    setResult(null);
+    try {
+      const d = await api("/api/audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, model }),
+      });
+      if (d.error) setError(d.error);
+      else setResult(d);
+    } catch (e: any) {
+      setError(e.message ?? "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }, [text, model]);
+
+  const money = (n: any) =>
+    typeof n === "number"
+      ? (n < 0 ? "" : "+") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : "";
+  const items: any[] = result?.report?.items ?? [];
+  const anomalies: string[] = result?.report?.anomalies ?? [];
+  const totals = result?.report?.totals ?? {};
+  const summary: string = result?.report?.summary ?? "";
+
+  return (
+    <Modal title="Audit spending" onClose={onClose} wide>
+      <p className="mb-4 text-sm leading-relaxed text-[var(--color-muted)]">
+        Paste a bank statement or upload receipts. A model running inside a trusted execution environment on NEAR AI
+        Cloud categorizes every charge and flags what looks unusual. Before a result shows, the app fetches a fresh
+        attestation and checks the signature on the answer. Your document is never stored.
+      </p>
+
+      {demo && (
+        <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.5)] bg-[rgba(245,158,11,0.08)] px-4 py-3 text-xs leading-relaxed text-[var(--color-warn)]">
+          <b>Demo mode.</b> The answer is currently served by {demoProvider} ({demoModel}) because no NEAR credits are
+          configured yet. The TEE attestation pipeline still runs live and is shown below, but this answer is <b>not
+          verified</b>. This mode is removed before submission. The demo model is a reasoning model, so expect about
+          two minutes per audit.
+        </div>
+      )}
+
+      {/* step 1, the document */}
+      <div className="card-2 p-4">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+          1, your document
+        </div>
+        <textarea
+          className="input h-44 w-full resize-y font-mono text-xs leading-relaxed"
+          placeholder="Paste a bank statement, or drop a receipts text file below..."
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setError("");
+          }}
+        />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".txt,.csv,.md,.log,text/plain"
+            className="hidden"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+          <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
+            Upload a file
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => loadSample("statement")}>
+            Load sample statement
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => loadSample("receipts")}>
+            Load sample receipts
+          </button>
+          <select className="input ml-auto max-w-[220px] text-xs" value={model} onChange={(e) => setModel(e.target.value)}>
+            {models.length > 0 && !models.includes(model) && <option value={model}>{model}</option>}
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button className="btn btn-primary mt-4 w-full" disabled={busy || !text.trim()} onClick={audit}>
+          {busy ? "Verifying the TEE and auditing..." : "Audit inside the TEE"}
+        </button>
+        <p className="mt-3 text-xs leading-relaxed text-[var(--color-faint)]">
+          <b className="text-[var(--color-muted)]">Stateless by design.</b> Your text goes straight from this browser to
+          the NEAR AI Cloud endpoint as a request body. It is held in memory for the duration of the request only, and
+          the server writes nothing to disk. No database, no uploads folder, no logs of your document.
+        </p>
+        {error && <p className="mt-3 text-xs leading-relaxed text-[var(--color-danger)]">{error}</p>}
+      </div>
+
+      {/* step 2, the proof */}
+      <div
+        className={`mt-4 rounded-2xl border p-4 ${
+          result ? (result.verified ? "border-[rgba(34,197,94,0.4)]" : "border-[rgba(239,68,68,0.45)]") : "border-[var(--color-rule)]"
+        } bg-[var(--color-bg-2)]`}
+      >
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+          2, the proof
+        </div>
+        {!result && (
+          <p className="text-xs leading-relaxed text-[var(--color-muted)]">
+            After the audit finishes, this panel lists every check that ran: the fresh nonce we minted, the TEE node
+            addresses, the NVIDIA GPU secure boot and debug state, the Intel TDX quote, and the signature that binds our
+            exact request and response to the attested key.
+          </p>
+        )}
+        {result && (
+          <>
+            <div className="mb-3 flex items-center gap-3">
+              <div
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border text-base ${
+                  result.verified
+                    ? "border-[var(--color-green)] bg-[rgba(34,197,94,0.15)] text-[var(--color-green)]"
+                    : "border-[var(--color-danger)] bg-[rgba(239,68,68,0.12)] text-[var(--color-danger)]"
+                }`}
+              >
+                {result.verified ? "✓" : "✕"}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold">
+                  {result.demo ? "Demo run " : "Analysis run "}
+                  <span className={result.verified ? "text-[var(--color-green)]" : "text-[var(--color-danger)]"}>
+                    {result.demo ? "Not verified (demo)" : result.verified ? "Verified" : "Not verified"}
+                  </span>
+                </div>
+                <div className="text-xs text-[var(--color-muted)]">
+                  {result.verified
+                    ? "Every check passed. The answer came from the attested trusted execution environment."
+                    : result.demo
+                      ? "The answer came from an external provider, not the TEE. The attestation proves the TEE fleet is healthy but does not cover this answer."
+                      : "One or more checks failed. Do not trust this result."}
+                </div>
+              </div>
+            </div>
+            <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+              {result.checks.map((c, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 border-b border-[var(--color-rule)] pb-1.5 text-xs last:border-0"
+                >
+                  <span
+                    className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] ${
+                      c.pass === null
+                        ? "border-[var(--color-rule)] text-[var(--color-faint)]"
+                        : c.pass
+                          ? "border-[rgba(34,197,94,0.5)] bg-[rgba(34,197,94,0.15)] text-[var(--color-green)]"
+                          : "border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.12)] text-[var(--color-danger)]"
+                    }`}
+                  >
+                    {c.pass === null ? "…" : c.pass ? "✓" : "✕"}
+                  </span>
+                  <div className="min-w-0">
+                    {c.name}
+                    {c.detail && (
+                      <div className="break-all font-mono text-[11px] text-[var(--color-faint)]">{c.detail}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 break-all font-mono text-[11px] leading-relaxed text-[var(--color-faint)]">
+              <div><b className="text-[var(--color-muted)]">model:</b> {result.model}</div>
+              <div><b className="text-[var(--color-muted)]">nonce:</b> {result.nonce}</div>
+              <div><b className="text-[var(--color-muted)]">chat id:</b> {result.chatId}</div>
+              <div><b className="text-[var(--color-muted)]">model TEE address:</b> {result.attestation.modelAddress}</div>
+              {result.attestation.gatewayAddress && (
+                <div><b className="text-[var(--color-muted)]">gateway address:</b> {result.attestation.gatewayAddress}</div>
+              )}
+              {result.signature.recovered && (
+                <div><b className="text-[var(--color-muted)]">recovered signer:</b> {result.signature.recovered}</div>
+              )}
+              <div><b className="text-[var(--color-muted)]">request sha256:</b> {result.requestHash}</div>
+              <div><b className="text-[var(--color-muted)]">response sha256:</b> {result.responseHash}</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* step 3, the audit */}
+      {result?.report && (
+        <div className="mt-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-bg-2)] p-4">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+            3, the audit
+          </div>
+          <div className="mb-3.5 grid grid-cols-2 gap-3">
+            <div className="card-2 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-[var(--color-faint)]">Money in</div>
+              <div className="mono mt-1 text-xl font-bold text-[var(--color-green)]">{money(totals.income)}</div>
+            </div>
+            <div className="card-2 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-[var(--color-faint)]">Money out</div>
+              <div className="mono mt-1 text-xl font-bold">{money(totals.spend)}</div>
+            </div>
+          </div>
+          {items.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--color-rule)] text-left text-[11px] uppercase tracking-wider text-[var(--color-faint)]">
+                    <th className="px-2 py-1.5 font-medium">Date</th>
+                    <th className="px-2 py-1.5 font-medium">Description</th>
+                    <th className="px-2 py-1.5 font-medium">Category</th>
+                    <th className="px-2 py-1.5 font-medium">Amount</th>
+                    <th className="px-2 py-1.5 font-medium">Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={i} className={it.flag ? "bg-[rgba(245,158,11,0.06)]" : ""}>
+                      <td className="mono whitespace-nowrap px-2 py-1.5 text-[var(--color-faint)]">{it.date || "n/a"}</td>
+                      <td className="px-2 py-1.5">{it.desc}</td>
+                      <td className="px-2 py-1.5">
+                        <span className="inline-block rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-2 py-0.5 text-[11px]">
+                          {it.category}
+                        </span>
+                      </td>
+                      <td className={`mono whitespace-nowrap px-2 py-1.5 ${Number(it.amount) > 0 ? "text-[var(--color-green)]" : ""}`}>
+                        {money(it.amount)}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {it.flag && (
+                          <span className="inline-block rounded-full border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warn)]">
+                            {String(it.flag).replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {anomalies.length > 0 && (
+            <ul className="mt-3.5 space-y-1.5">
+              {anomalies.map((a, i) => (
+                <li
+                  key={i}
+                  className="rounded-r-lg border-l-2 border-[var(--color-warn)] bg-[var(--color-bg-2)] px-2.5 py-2 text-xs leading-relaxed"
+                >
+                  {a}
+                </li>
+              ))}
+            </ul>
+          )}
+          {summary && <p className="mt-3.5 text-[13px] leading-relaxed text-[var(--color-muted)]">{summary}</p>}
+        </div>
+      )}
+      {result && !result.report && result.rawReply && (
+        <div className="mt-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-bg-2)] p-4">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+            Raw model reply (could not parse into a table)
+          </div>
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-[var(--color-muted)]">{result.rawReply}</p>
+        </div>
+      )}
+
+      <p className="mt-4 text-[11px] leading-relaxed text-[var(--color-faint)]">
+        <b className="text-[var(--color-muted)]">Nothing is stored.</b> This route has no database and no file writes. The
+        document text exists only inside a single HTTPS request to NEAR AI Cloud and in the memory of this process until
+        the response is sent. The same promise lives in the source comments of <span className="mono">src/app/api/audit/route.ts</span>. All
+        sample documents are fictional.
+      </p>
     </Modal>
   );
 }

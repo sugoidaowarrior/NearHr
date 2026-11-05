@@ -52,6 +52,16 @@ const features = [
     ),
   },
   {
+    title: "Private expense audit",
+    body: "Upload receipts or a statement. A model in a trusted execution environment on NEAR AI Cloud flags what looks unusual, and the app proves the answer ran inside the TEE.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     title: "Payday reminders",
     body: "Set a pay day and NearHr tracks who is due, flags overdue runs, and nudges your team by email.",
     icon: (
@@ -68,6 +78,7 @@ const stats = [
   ["3", "privacy levels"],
   ["2", "assets · NEAR and USDC.e"],
   ["100%", "on NEAR mainnet"],
+  ["TEE", "verified AI expense audit"],
 ];
 
 const steps = [
