@@ -87,6 +87,7 @@ type Run = {
   total_yocto: string;
   near_ref: string | null;
   executed_at: string | null;
+  created_at: string;
   items: RunItem[];
 };
 type SalaryMonth = {
@@ -1210,7 +1211,11 @@ export default function Dashboard() {
                       return (
                         <div key={r.id} className="flex items-center justify-between gap-2 text-sm">
                           <span className="mono text-xs text-[var(--color-faint)]">
-                            {r.executed_at ? new Date(r.executed_at).toLocaleDateString() : "queued"}
+                            {r.status === "draft"
+                              ? `created ${fmtDate(r.created_at)}`
+                              : r.executed_at
+                                ? fmtDate(r.executed_at)
+                                : "queued"}
                           </span>
                           <span className="mono">
                             {ok}/{r.employee_count} ok
@@ -1477,7 +1482,7 @@ export default function Dashboard() {
                         <div>
                           <div className="text-sm font-semibold">{r.name}</div>
                           <div className="text-xs text-[var(--muted-2)]">
-                            {r.employee_count} people · {r.asset} · {r.privacy}
+                            {r.employee_count} people · {r.asset} · {r.privacy} · created {fmtDate(r.created_at)}
                           </div>
                         </div>
                         <span

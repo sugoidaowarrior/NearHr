@@ -202,6 +202,7 @@ export interface RunSummary {
   total_yocto: string;
   near_ref: string | null;
   executed_at: string | null;
+  created_at: string;
   items: {
     email: string;
     name: string;
@@ -239,6 +240,7 @@ export function getRun(runId: string, employerId?: string): RunSummary | null {
     total_yocto: String(run.total_yocto),
     near_ref: (run.near_ref as string | null) ?? null,
     executed_at: (run.executed_at as string | null) ?? null,
+    created_at: String(run.created_at),
     items: items.map((i) => ({
       email: String(i.recipient_email),
       name: String(i.recipient_name ?? ""),
