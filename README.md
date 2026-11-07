@@ -18,9 +18,9 @@ transaction, so you can check it with your own eyes at any time.
 1. **Payroll.** Add your team one by one or import a CSV, validate, and pay
    up to 50 people per run in native NEAR or USDC. Every payout is recorded
    with its status and on chain reference.
-2. **Invoices.** Bill a client a total amount in NEAR or USDC, with a short
-   narration and a due date. They open a public pay link in any browser and
-   pay straight to your vault.
+2. **Invoices.** Bill a client in NEAR or USDC with a total amount, optional
+   line items, a short narration and a due date. They open a public pay link
+   in any browser and pay straight to your vault.
 
 ## What a bookkeeper needs to know
 
@@ -33,8 +33,8 @@ transaction, so you can check it with your own eyes at any time.
   amount back to the payer on chain, records the refund transaction, and
   reopens the invoice so it can be paid again.
 - **One CSV, no questions.** Export gives you a file with the client, the
-  amount, the due date, the narration, the asset, the status, the payer
-  wallet, the transaction, and the refund reference when present.
+  amount, the due date, the narration, the line items, the asset, the status,
+  the payer wallet, the transaction, and the refund reference when present.
 - **A PDF statement for your auditor.** Pick a date range and NearHr renders
   every invoice payment, payroll run, manual send and refund in that window,
   each with its on chain transaction.
@@ -42,10 +42,12 @@ transaction, so you can check it with your own eyes at any time.
 ## The invoice flow, step by step
 
 1. Open **Invoices** from the rail and press **New invoice**.
-2. Enter the client name, the amount, the token (NEAR or USDC), the due date
-   and a note. Press **Save and get link**.
+2. Enter the client name, the amount, the token (NEAR or USDC), the due date,
+   a note and any line items. If you add lines the amount adds up from them.
+   Press **Save and get link**.
 3. Share the link. It works on a phone and needs no login. The client sees
-   the amount, the note, the due date and a **Pay** button.
+   the amount, the line items when present, the note, the due date and a
+   **Pay** button.
 4. The client presses **Pay** and picks one of two options:
    - **I have a NEAR wallet.** One button opens their wallet (Meteor or
      HERE). They approve the exact transfer and the money goes straight to

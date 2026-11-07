@@ -15,6 +15,7 @@ type Inv = {
   slug: string;
   clientName: string;
   note: string | null;
+  items: { description: string; amount: string }[] | null;
   amount: string;
   currency: string;
   asset: "NEAR" | "USDC";
@@ -376,6 +377,18 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
           billed to {inv.clientName} · due {inv.dueDate}
         </div>
         {inv.note && <div style={{ fontSize: 12.5, marginTop: 8, color: "var(--color-ink)", opacity: 0.85 }}>{inv.note}</div>}
+        {inv.items && inv.items.length > 0 && (
+          <div style={{ marginTop: 10, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 8 }}>
+            {inv.items.map((it, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5, padding: "3px 0" }}>
+                <span style={{ color: "var(--color-ink)", opacity: 0.85 }}>{it.description}</span>
+                <span className="mono" style={{ color: "var(--color-muted)", whiteSpace: "nowrap" }}>
+                  {it.amount} {inv.asset}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* paid */}

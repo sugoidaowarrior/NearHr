@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession, COOKIE } from "@/lib/sessions";
-import { listInvoices } from "@/lib/invoices";
+import { listInvoices, parseItems } from "@/lib/invoices";
 import { explorerUrl, defaultNearConfig } from "@/lib/near";
 
 // GET /api/invoices/csv -> one row per invoice, an accountant opens it with no questions.
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     "invoice_date",
     "due_date",
     "narration",
+    "line_items",
     "asset",
     "amount",
     "status",
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
       inv.created_at.slice(0, 10),
       inv.due_date,
       inv.note ?? "",
+      parseItems(inv.items_json).map((it) => `${it.description} ${it.amount}`).join(" | "),
       inv.asset,
       inv.amount,
       inv.status,

@@ -27,6 +27,13 @@ export async function POST(req: NextRequest) {
       amount: String(body.amount ?? ""),
       due_date: body.due_date ?? body.dueDate ?? "",
       asset: body.asset === "NEAR" ? "NEAR" : "USDC",
+      items: ((): { description: string; amount: string }[] | undefined => {
+        const raw: any[] = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
+        const cleaned = raw
+          .map((it) => ({ description: String(it?.description ?? ""), amount: String(it?.amount ?? "") }))
+          .filter((it) => it.description && it.amount);
+        return cleaned.length ? cleaned : undefined;
+      })(),
     });
     return NextResponse.json({ invoice: inv, payUrl: `/i/${inv.slug}` }, { status: 201 });
   } catch (e) {

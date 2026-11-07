@@ -1604,11 +1604,16 @@ function InvoicesModal({
   const [asset, setAsset] = useState<"USDC" | "NEAR">("USDC");
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
+  const [rows, setRows] = useState<{ desc: string; amt: string }[]>([{ desc: "", amt: "" }]);
   const [busy, setBusy] = useState(false);
   const [refundBusy, setRefundBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
 
   const amtNum = Number(amount);
+  const rowsTotal = rows.reduce((s, r) => {
+    const v = Number(r.amt);
+    return Number.isFinite(v) ? s + v : s;
+  }, 0);
 
   async function create() {
     setErr("");
@@ -1627,6 +1632,10 @@ function InvoicesModal({
           amount: amtNum.toFixed(2),
           due_date: dueDate,
           asset,
+          items: rows
+            .map((row) => ({ description: row.desc.trim(), amount: row.amt.trim() }))
+            .filter((row) => row.description && row.amount)
+            .map((row) => ({ ...row, amount: Number(row.amount).toFixed(2) })),
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -1785,6 +1794,21 @@ function InvoicesModal({
                       <div className="mono text-xs text-[var(--muted)]">
                         ${Number(inv.amount).toFixed(2)} · {inv.asset} · due {inv.due_date}
                       </div>
+                      {(() => {
+                        try {
+                          const it = JSON.parse(inv.items_json || "[]");
+                          if (Array.isArray(it) && it.length) {
+                            return (
+                              <div className="mt-1 truncate text-[11px] text-[var(--color-faint)]">
+                                {it.map((x: { description: string }) => x.description).join(" · ")}
+                              </div>
+                            );
+                          }
+                        } catch {
+                          /* no line items */
+                        }
+                        return null;
+                      })()}
                     </div>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${st.cls}`}>{st.label}</span>
                   </div>
@@ -1854,6 +1878,46 @@ function InvoicesModal({
             <Field label="Note (optional)">
               <input className="input" placeholder="what you are billing for" value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
+          </div>
+
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Line items (optional)</span>
+              <button className="text-xs font-semibold text-[var(--color-accent)]" onClick={() => setRows((r) => [...r, { desc: "", amt: "" }])}>
+                Add row
+              </button>
+            </div>
+            {rows.map((row, i) => (
+              <div key={i} className="flex gap-2 mb-1.5">
+                <input
+                  className="input flex-1"
+                  placeholder="Description"
+                  value={row.desc}
+                  onChange={(e) => setRows((r) => r.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
+                />
+                <input
+                  className="input mono w-28 shrink-0"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={row.amt}
+                  onChange={(e) => setRows((r) => r.map((x, j) => (j === i ? { ...x, amt: e.target.value } : x)))}
+                />
+                <button
+                  className="btn btn-ghost !px-2 !py-1 text-xs shrink-0"
+                  onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [{ desc: "", amt: "" }]))}
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            {rowsTotal > 0 && (
+              <div className="mt-1 text-xs text-[var(--muted)]">
+                Lines total {rowsTotal.toFixed(2)} {asset}
+                {Number.isFinite(amtNum) && Math.abs(rowsTotal - amtNum) > 0.005 && (
+                  <span className="text-[var(--color-danger)]"> · billed amount field shows {amtNum.toFixed(2)}</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card-2 mt-4 px-4 py-2.5 text-xs text-[var(--muted)]">

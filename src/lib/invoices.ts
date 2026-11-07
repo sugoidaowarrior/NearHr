@@ -128,6 +128,24 @@ export function formatAmount(base: string | bigint): string {
   return s.slice(0, -6) + (tail ? "." + tail : "");
 }
 
+export type InvoiceLineItem = {
+  description: string;
+  amount: string; // decimal string in the invoice's asset
+};
+
+export function parseItems(itemsJson: string | null | undefined): InvoiceLineItem[] {
+  if (!itemsJson) return [];
+  try {
+    const v = JSON.parse(itemsJson);
+    if (!Array.isArray(v)) return [];
+    return v
+      .filter((x) => x && typeof x.description === "string" && typeof x.amount === "string")
+      .map((x) => ({ description: x.description, amount: x.amount }));
+  } catch {
+    return [];
+  }
+}
+
 export function createInvoice(
   employerId: string,
   input: {
@@ -137,12 +155,25 @@ export function createInvoice(
     amount: string;
     due_date: string;
     asset?: InvoiceAsset;
+    items?: { description: string; amount: string }[];
   }
 ): Invoice {
   if (!input.client_name || input.client_name.length > 120) throw new Error("client name is required");
   if (input.client_email && !/^[^\s@]+\@[^\s@]+\.[^\s@]+$/.test(input.client_email)) throw new Error("bad client email");
   const asset: InvoiceAsset = input.asset === "NEAR" ? "NEAR" : "USDC";
-  const base = amountBase({ amount: input.amount, asset });
+  const items: InvoiceLineItem[] = (input.items ?? [])
+    .map((it) => ({ description: it.description.trim().slice(0, 200), amount: it.amount.trim() }))
+    .filter((it) => it.description && it.amount);
+  let amountStr = input.amount;
+  if (items.length) {
+    for (const it of items) {
+      const v = Number(it.amount);
+      if (!Number.isFinite(v) || v <= 0) throw new Error("each line item needs an amount above zero");
+    }
+    const totalCents = items.reduce((s, it) => s + Math.round(Number(it.amount) * 100), 0);
+    amountStr = (totalCents / 100).toFixed(2);
+  }
+  const base = amountBase({ amount: amountStr, asset });
   if (base <= 0n) throw new Error("amount must be above zero");
   if (base > (asset === "NEAR" ? 10n ** 30n : 10n ** 12n)) throw new Error("invoice too large");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.due_date) || isNaN(Date.parse(input.due_date))) throw new Error("due date must be YYYY-MM-DD");
@@ -151,8 +182,19 @@ export function createInvoice(
   const db = getDb();
   db.prepare(
     `INSERT INTO invoices (id, slug, employer_id, client_name, client_email, note, items_json, amount, due_date, asset)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)`
-  ).run(id, slug, employerId, input.client_name, input.client_email ?? null, input.note ?? null, input.amount, input.due_date, asset);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    slug,
+    employerId,
+    input.client_name,
+    input.client_email ?? null,
+    input.note ?? null,
+    items.length ? JSON.stringify(items) : "[]",
+    amountStr,
+    input.due_date,
+    asset
+  );
   const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(id) as Invoice;
   if (!row) throw new Error("insert failed");
   return row;
@@ -215,6 +257,7 @@ export function publicView(inv: Invoice, withPay = false) {
     amount: inv.amount,
     asset: inv.asset,
     dueDate: inv.due_date,
+    items: parseItems(inv.items_json),
     status: inv.status,
     nearTx: inv.near_tx,
     refundTx: inv.refund_tx,
