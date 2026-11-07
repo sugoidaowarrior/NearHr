@@ -26,11 +26,12 @@ export interface PriceMap {
   USDC: number;
   NGN: number;
   EUR: number; // USD -> EUR rate (1 USD = EUR EUR) for the currency picker
+  GBP: number; // USD -> GBP rate (1 USD = GBP GBP) for the currency picker
   source: "live" | "fallback";
   at: number;
 }
 
-export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0, NGN: 1500, EUR: 0.92 };
+export const FALLBACK_USD = { NEAR: 2.2, USDC: 1.0, NGN: 1500, EUR: 0.92, GBP: 0.79 };
 const PRICE_TTL_MS = 60_000;
 
 // Pyth price feeds (mainnet). Real time on chain oracle prices. Reading prices
@@ -104,22 +105,24 @@ async function fetchLiveUsdcUsd(): Promise<number | null> {
   return v != null ? v : null;
 }
 
-async function fetchUsdRates(): Promise<{ NGN: number | null; EUR: number | null }> {
+async function fetchUsdRates(): Promise<{ NGN: number | null; EUR: number | null; GBP: number | null }> {
   try {
     const r = await fetch("https://open.er-api.com/v6/latest/USD", {
       signal: AbortSignal.timeout(4000),
       cache: "no-store",
     });
-    if (!r.ok) return { NGN: null, EUR: null };
-    const j = (await r.json().catch(() => null)) as { rates?: { NGN?: number; EUR?: number } } | null;
+    if (!r.ok) return { NGN: null, EUR: null, GBP: null };
+    const j = (await r.json().catch(() => null)) as { rates?: { NGN?: number; EUR?: number; GBP?: number } } | null;
     const ngn = j?.rates?.NGN;
     const eur = j?.rates?.EUR;
+    const gbp = j?.rates?.GBP;
     return {
       NGN: typeof ngn === "number" && ngn > 0 ? ngn : null,
       EUR: typeof eur === "number" && eur > 0 ? eur : null,
+      GBP: typeof gbp === "number" && gbp > 0 ? gbp : null,
     };
   } catch {
-    return { NGN: null, EUR: null };
+    return { NGN: null, EUR: null, GBP: null };
   }
 }
 
@@ -131,6 +134,7 @@ export async function getPrices(): Promise<PriceMap> {
     USDC: usdcLive ?? FALLBACK_USD.USDC,
     NGN: rates.NGN ?? FALLBACK_USD.NGN,
     EUR: rates.EUR ?? FALLBACK_USD.EUR,
+    GBP: rates.GBP ?? FALLBACK_USD.GBP,
     source: live != null ? "live" : "fallback",
     at: Date.now(),
   };

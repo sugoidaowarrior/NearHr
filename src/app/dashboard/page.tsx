@@ -22,8 +22,8 @@ type Balance = {
   near: { yocto: string; human: string };
   usdc: { base: string; human: string };
 };
-type Prices = { NEAR: number; USDC: number; NGN: number; EUR: number; source: "live" | "fallback"; at: number };
-type Currency = "NGN" | "USD" | "EUR";
+type Prices = { NEAR: number; USDC: number; NGN: number; EUR: number; GBP: number; source: "live" | "fallback"; at: number };
+type Currency = "NGN" | "USD" | "EUR" | "GBP";
 type Employee = {
   id: string;
   name: string;
@@ -132,7 +132,7 @@ type SalarySummary = {
     created_at: string;
   }[];
   months: SalaryMonth[];
-  prices: { NEAR: number; USDC: number; NGN: number; EUR: number };
+  prices: { NEAR: number; USDC: number; NGN: number; EUR: number; GBP: number };
 };
 
 /* ── helpers ────────────────────────────────────────────────────────── */
@@ -151,27 +151,27 @@ const ngn = (n: number) =>
   "₦" + Math.round(n).toLocaleString("en-NG");
 
 /**
- * Currency aware amount formatters. The employer picks NGN/USD/EUR at sign in;
+ * Currency aware amount formatters. The employer picks NGN/USD/EUR/GBP at sign in;
  * every amount widget renders in that currency. NGN keeps the naira symbol,
- * USD and EUR use their standard codes. compact() is for the chart axis (M/K).
+ * USD, EUR and GBP use their standard codes. compact() is for the chart axis (M/K).
  */
 function makeFmts(currency: Currency, prices: Prices | null) {
   const isNgn = currency === "NGN";
   const fmt = (n: number) => {
     if (isNgn) return ngn(Math.round(n));
-    const code = currency as "USD" | "EUR";
+    const code = currency as "USD" | "EUR" | "GBP";
     return n.toLocaleString("en-US", { style: "currency", currency: code, maximumFractionDigits: 0 });
   };
   const compact = (n: number) => {
-    const sym = isNgn ? "₦" : currency === "USD" ? "$" : "€";
+    const sym = isNgn ? "₦" : currency === "USD" ? "$" : currency === "GBP" ? "£" : "€";
     if (n >= 1_000_000) return sym + (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
     if (n >= 1000) return sym + (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
     return sym + Math.round(n);
   };
   // Convert a USD figure into the chosen display currency.
   const fromUsd = (usdVal: number) =>
-    isNgn ? usdVal * (prices?.NGN ?? 1500) : currency === "EUR" ? usdVal * (prices?.EUR ?? 0.92) : usdVal;
-  return { fmt, compact, fromUsd, isNgn, symbol: isNgn ? "₦" : currency === "USD" ? "$" : "€" };
+    isNgn ? usdVal * (prices?.NGN ?? 1500) : currency === "EUR" ? usdVal * (prices?.EUR ?? 0.92) : currency === "GBP" ? usdVal * (prices?.GBP ?? 0.79) : usdVal;
+  return { fmt, compact, fromUsd, isNgn, symbol: isNgn ? "₦" : currency === "USD" ? "$" : currency === "GBP" ? "£" : "€" };
 }
 const shortAddr = (a: string) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || "…");
 const nameInitials = (name: string) =>
@@ -583,7 +583,7 @@ export default function Dashboard() {
     setCurrencyOpen(false);
     try {
       await api("/api/me", { method: "PATCH", body: JSON.stringify({ currency: c }) });
-      notify("ok", `amounts now shown in ${c === "NGN" ? "naira" : c === "USD" ? "dollars" : "euros"}`);
+      notify("ok", `amounts now shown in ${c === "NGN" ? "naira" : c === "USD" ? "dollars" : c === "GBP" ? "pounds" : "euros"}`);
     } catch {
       /* best effort, local state already updated */
     }
@@ -594,7 +594,7 @@ export default function Dashboard() {
     try {
       const me = await api("/api/me");
       setUser(me.user);
-      const cur: Currency = (["NGN", "USD", "EUR"].includes(me.user?.display_currency) ? me.user.display_currency : "NGN") as Currency;
+      const cur: Currency = (["NGN", "USD", "EUR", "GBP"].includes(me.user?.display_currency) ? me.user.display_currency : "NGN") as Currency;
       setCurrency(cur);
       // Every user is an HR operator of their own workspace.
       const [pf, emps, pay, sch, runRes, sal] = await Promise.all([
@@ -974,7 +974,7 @@ export default function Dashboard() {
                     <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
                       Show amounts in
                     </div>
-                    {(["NGN", "USD", "EUR"] as Currency[]).map((c) => (
+                    {(["NGN", "USD", "EUR", "GBP"] as Currency[]).map((c) => (
                       <button
                         key={c}
                         onClick={() => changeCurrency(c)}
@@ -982,7 +982,7 @@ export default function Dashboard() {
                           currency === c ? "text-[var(--color-accent)]" : ""
                         }`}
                       >
-                        <span>{c === "NGN" ? "₦ Naira" : c === "USD" ? "$ US Dollar" : "€ Euro"}</span>
+                        <span>{c === "NGN" ? "₦ Naira" : c === "USD" ? "$ US Dollar" : c === "GBP" ? "£ British Pound" : "€ Euro"}</span>
                         {currency === c && (
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                             <path d="M20 6L9 17l-5-5" />

@@ -145,6 +145,6 @@ export async function GET(req: NextRequest) {
     },
     pendingRuns,
     months,
-    prices: { NEAR: prices.NEAR, USDC: prices.USDC, NGN: prices.NGN, EUR: prices.EUR },
+    prices: { NEAR: prices.NEAR, USDC: prices.USDC, NGN: prices.NGN, EUR: prices.EUR, GBP: prices.GBP },
   });
 }

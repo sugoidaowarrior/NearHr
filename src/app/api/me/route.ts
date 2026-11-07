@@ -45,8 +45,8 @@ export async function PATCH(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { currency?: string };
   const c = String(body.currency ?? "").toUpperCase();
-  if (!["NGN", "USD", "EUR"].includes(c)) {
-    return NextResponse.json({ error: "currency must be NGN, USD or EUR" }, { status: 400 });
+  if (!["NGN", "USD", "EUR", "GBP"].includes(c)) {
+    return NextResponse.json({ error: "currency must be NGN, USD, EUR or GBP" }, { status: 400 });
   }
   getDb().prepare("UPDATE users SET display_currency = ? WHERE id = ?").run(c, userId);
   const user = getDb().prepare("SELECT * FROM users WHERE id = ?").get(userId) as Record<string, unknown>;
