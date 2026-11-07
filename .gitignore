@@ -41,7 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# hushpay
+# NearHr
 data/
 .env.local
 

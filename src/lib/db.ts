@@ -1,5 +1,5 @@
 /**
- * SQLite persistence (better-sqlite3). File lives in data/hushpay.db
+ * SQLite persistence (better-sqlite3). File lives in data/nearhr.db
  * (gitignored). KMS key auto-generated on first run into data/kms.key.
  */
 import Database from "better-sqlite3";
@@ -8,7 +8,7 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "hushpay.db");
+const DB_PATH = path.join(DATA_DIR, "nearhr.db");
 const KMS_PATH = path.join(DATA_DIR, "kms.key");
 
 let db: Database.Database;

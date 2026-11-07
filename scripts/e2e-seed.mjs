@@ -7,7 +7,7 @@ const userId = "test-employer-001";
 db.prepare(
   `INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, 'employer')
    ON CONFLICT(id) DO UPDATE SET role='employer', email=excluded.email`
-).run(userId, "boss@hushpay.test", "Test Boss");
+).run(userId, "boss@nearhr.test", "Test Boss");
 const token = "e2e-session-token-0001";
 const expires = new Date(Date.now() + 7 * 864e5).toISOString();
 db.prepare(
