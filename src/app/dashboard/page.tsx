@@ -1799,8 +1799,8 @@ function InvoicesModal({
                           const it = JSON.parse(inv.items_json || "[]");
                           if (Array.isArray(it) && it.length) {
                             return (
-                              <div className="mt-1 truncate text-[11px] text-[var(--color-faint)]">
-                                {it.map((x: { description: string }) => x.description).join(" · ")}
+                              <div className="mt-1 truncate text-[11px] text-[var(--color-faint)]" title={it.map((x: { description: string; amount: string }) => `${x.description} ${x.amount}`).join(" · ")}>
+                                {it.map((x: { description: string; amount: string }) => `${x.description} ${x.amount}`).join(" · ")}
                               </div>
                             );
                           }
@@ -1888,22 +1888,25 @@ function InvoicesModal({
               </button>
             </div>
             {rows.map((row, i) => (
-              <div key={i} className="flex gap-2 mb-1.5">
+              <div key={i} className="mb-1.5" style={{ display: "flex", gap: 8 }}>
                 <input
-                  className="input flex-1"
+                  className="input"
+                  style={{ flex: 1, minWidth: 0 }}
                   placeholder="Description"
                   value={row.desc}
                   onChange={(e) => setRows((r) => r.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
                 />
                 <input
-                  className="input mono w-28 shrink-0"
+                  className="input mono"
+                  style={{ width: 108, flex: "0 0 108px" }}
                   inputMode="decimal"
                   placeholder="0.00"
                   value={row.amt}
                   onChange={(e) => setRows((r) => r.map((x, j) => (j === i ? { ...x, amt: e.target.value } : x)))}
                 />
                 <button
-                  className="btn btn-ghost !px-2 !py-1 text-xs shrink-0"
+                  className="btn btn-ghost"
+                  style={{ flex: "0 0 auto", padding: "0 10px", fontSize: 12 }}
                   onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [{ desc: "", amt: "" }]))}
                 >
                   x
