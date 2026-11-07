@@ -14,7 +14,7 @@ const features = [
   },
   {
     title: "NEAR and USDC payroll",
-    body: "Import a CSV, validate it, and send a run to up to 50 employees in native NEAR or USDC.e.",
+    body: "Import a CSV, validate it, and send a run to up to 50 employees in native NEAR or USDC. Every payout is a real onchain transfer.",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -23,51 +23,43 @@ const features = [
     ),
   },
   {
-    title: "Privacy in three levels",
-    body: "Pick transparent, shielded or compliant per payment. Stealth addresses from SIP Protocol.",
+    title: "Crypto invoices",
+    body: "Bill a client in NEAR or USDC and send them a pay link. They pay in the exact token you chose, straight from their own wallet.",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 7h8M8 11h8M8 15h5" />
+      </svg>
+    ),
+  },
+  {
+    title: "Wallet popup pay",
+    body: "Meteor and HERE open right from the pay page. The client signs, approves, and the chain confirms the exact amount before the invoice closes.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="2" y="6" width="20" height="13" rx="3" />
+        <path d="M2 10h20" />
+        <circle cx="17" cy="14" r="1.4" />
+      </svg>
+    ),
+  },
+  {
+    title: "Trustless settlement",
+    body: "The server reads the chain, not the client. An invoice only flips to paid once your vault is provably credited the exact amount.",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
         <path d="M9 12l2 2 4-4" />
       </svg>
     ),
   },
   {
-    title: "Employer audit",
-    body: "A viewing key lets your auditor verify every payout. Encrypted email backup is optional, never compulsory.",
+    title: "PDF payroll statement",
+    body: "Pick a date range and download a signed PDF of every payroll run and settled invoice, each with its NEAR transaction for your auditor.",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="6" />
-        <path d="M20 20l-4.5-4.5M8 11h6M11 8v6" />
-      </svg>
-    ),
-  },
-  {
-    title: "Swap on mainnet",
-    body: "Move between NEAR and USDC.e at a live Ref Finance rate, executed straight from your wallet.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M7 8h13l-3-3M17 16H4l3 3" />
-      </svg>
-    ),
-  },
-  {
-    title: "Private expense audit",
-    body: "Upload receipts or a statement. A model in a trusted execution environment on NEAR AI Cloud flags what looks unusual, and the app proves the answer ran inside the TEE.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" />
-        <path d="M9 12l2 2 4-4" />
-      </svg>
-    ),
-  },
-  {
-    title: "Payday reminders",
-    body: "Set a pay day and NearHr tracks who is due, flags overdue runs, and nudges your team by email.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6M9 13h6M9 17h4" />
       </svg>
     ),
   },
@@ -75,16 +67,16 @@ const features = [
 
 const stats = [
   ["50", "people per payroll run"],
-  ["3", "privacy levels"],
-  ["2", "assets · NEAR and USDC.e"],
-  ["100%", "on NEAR mainnet"],
-  ["TEE", "verified AI expense audit"],
+  ["1", "onchain receipt per payment"],
+  ["2", "assets on every invoice · NEAR or USDC"],
+  ["100%", "settled on NEAR"],
+  ["PDF", "payroll statement, on demand"],
 ];
 
 const steps = [
   ["Import", "Drop a CSV of your team or add people one by one. Wallet and salary, per person."],
-  ["Validate", "NearHr checks every wallet, amount and privacy level before anything touches the chain."],
-  ["Pay out", "One batch sends up to 50 payments in NEAR or USDC.e, and the ledger records each one."],
+  ["Validate", "NearHr checks every wallet and amount before anything touches the chain."],
+  ["Pay out", "One batch sends up to 50 payments in NEAR or USDC, and the ledger records each one."],
 ];
 
 function CheckList({ rows }: { rows: [string, string][] }) {
@@ -116,14 +108,14 @@ export default function Home() {
           <Link href="#system" className="nav-link hidden sm:inline-block">
             System
           </Link>
-          <Link href="#borders" className="nav-link hidden sm:inline-block">
-            Across borders
-          </Link>
           <Link href="#payroll" className="nav-link hidden sm:inline-block">
             Payroll
           </Link>
-          <Link href="#privacy" className="nav-link hidden sm:inline-block">
-            Privacy
+          <Link href="#invoices" className="nav-link hidden sm:inline-block">
+            Invoices
+          </Link>
+          <Link href="/docs" className="nav-link hidden sm:inline-block">
+            Docs
           </Link>
           <Link href="/login" className="nav-link">
             Sign in
@@ -137,26 +129,26 @@ export default function Home() {
 
       {/* hero */}
       <section className="landing-hero">
-        <span className="landing-kicker">HR and Payroll on NEAR Protocol</span>
+        <span className="landing-kicker">HR and payroll on NEAR Protocol</span>
         <h1 className="mx-auto mt-4 max-w-4xl font-[var(--font-display)] text-[clamp(44px,7vw,84px)] font-bold leading-[0.98] tracking-[-0.04em]">
           <span className="mask-line display">
             <span className="mask-d2">Pay your team</span>
           </span>
           <span className="mask-line display">
-            <span className="mask-d3 display-grad">across borders.</span>
+            <span className="mask-d3 display-grad">and get paid onchain.</span>
           </span>
         </h1>
         <p className="landing-lead mx-auto max-w-2xl">
-          We make HR and payroll work across borders. Streamline your payroll tasks and workflows
-          to manage your local and global team, run payroll on time in multiple currencies, and
-          keep every receipt on NEAR mainnet. HR and payroll, made easy.
+          NearHr is a real money app for the people who run payroll and the freelancers who wait for it.
+          Pay your team in NEAR or USDC, bill your clients in the token of your choice, and keep every
+          receipt on NEAR. HR and payroll, made easy.
         </p>
         <div className="fade-up d4 mt-9 flex flex-wrap items-center justify-center gap-4">
           <Link href="/api/auth/google/start" className="btn btn-primary">
-            Book a demo
+            Open the app
           </Link>
-          <Link href="/login" className="btn btn-ghost">
-            I have an account
+          <Link href="/docs" className="btn btn-ghost">
+            Read the docs
           </Link>
         </div>
         <div className="hero-photo fade-up d5">
@@ -165,21 +157,21 @@ export default function Home() {
             <span className="chip-dot ok" />
             <div>
               <b>Payday executed</b>
-              <span>50 people · NEAR + USDC.e</span>
+              <span>50 people · NEAR + USDC</span>
             </div>
           </div>
           <div className="chip c2">
             <div>
-              <b>Privacy level</b>
-              <span>shielded · SIP stealth</span>
+              <b>Invoice settled</b>
+              <span>paid in USDC on NEAR</span>
             </div>
-            <span className="chip-badge">3</span>
+            <span className="chip-badge">✓</span>
           </div>
           <div className="chip c3">
             <span className="chip-ico">✓</span>
             <div>
               <b>₦12,480,000 sent</b>
-              <span>receipt on NEAR mainnet</span>
+              <span>50 receipts recorded</span>
             </div>
           </div>
         </div>
@@ -217,82 +209,53 @@ export default function Home() {
         </div>
       </section>
 
-      {/* across borders */}
-      <section id="borders" className="landing-section">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="landing-kicker">Putting your business ahead</div>
-          <h2 className="landing-h2">One payroll run, every time zone.</h2>
-          <p className="landing-lead mx-auto">
-            Streamline your HR and payroll tasks and workflows to efficiently manage your local
-            and global team. Run payroll on time in multiple currencies, convert at a live rate,
-            and settle in NEAR or USDC.e. It is HR and payroll made easy, wherever your business
-            takes you.
-          </p>
-        </div>
-        <img src="/img/hr-global.svg" className="mock" alt="Global payroll map: payments flowing from Lagos to teams in Austin, London, Nairobi, Berlin, Tokyo and Sydney" />
-      </section>
-
-      {/* employee payroll */}
+      {/* payroll */}
       <section id="payroll" className="landing-section">
         <div className="mx-auto max-w-3xl text-center">
           <div className="landing-kicker">Employee payroll</div>
           <h2 className="landing-h2">Payroll tools that bend, not break.</h2>
           <p className="landing-lead mx-auto">
             No matter your use case or internal process, NearHr delivers a fulfilling pay to your
-            people on time, with an automated payslip and a receipt on NEAR mainnet for every run.
+            people on time, with an automated payslip and a receipt on NEAR for every run.
           </p>
         </div>
         <CheckList
           rows={[
-            ["Multi currency pay", "Run payroll in Naira, dollars or stablecoins and settle in NEAR or USDC.e at a live rate."],
+            ["Multi currency pay", "Run payroll in Naira, dollars or stablecoins and settle in NEAR or USDC at a live rate."],
             ["Custom schedules", "Monthly, weekly or one off bonuses. Set the cadence that fits your operations."],
-            ["Split payroll", "Send part of a salary to one account and the rest elsewhere, with no transfer fees."],
+            ["CSV import and export", "Bring your roster in as a spreadsheet and take your ledger out as CSV, any time."],
           ]}
         />
-        <img src="/img/hr-payslip.svg" className="mock" alt="Automated payslip for Ada Okoye: base salary and bonus in NEAR, net paid in Naira, receipt on NEAR mainnet" />
+        <img src="/img/hr-payslip.svg" className="mock" alt="Automated payslip for Ada Okoye: base salary and bonus in NEAR, net paid in Naira, receipt on NEAR" />
       </section>
 
-      {/* people first */}
-      <section className="landing-section">
-        <div className="people-row">
-          <img
-            src="/img/hr-people.jpg"
-            className="people-photo"
-            alt="HR operator reviewing payroll on a tablet"
-          />
-          <div className="people-copy">
-            <div className="landing-kicker">Employee benefits</div>
-            <h2 className="landing-h2">Put your people front and center.</h2>
-            <p className="landing-lead">
-              It takes more than a salary. NearHr keeps your team directory, pay day and last paid
-              amount in one place, and reminds you when someone is still waiting on their pay.
-            </p>
-            <ul className="people-list">
-              <li>
-                <span className="check-dot" />
-                <span>
-                  <b>Team directory</b>
-                  <em>Every person with wallet, salary, pay day and privacy level at a glance.</em>
-                </span>
-              </li>
-              <li>
-                <span className="check-dot" />
-                <span>
-                  <b>Pay day reminders</b>
-                  <em>Set the date once and NearHr flags anyone still unpaid after the run.</em>
-                </span>
-              </li>
-              <li>
-                <span className="check-dot" />
-                <span>
-                  <b>Audit viewing key</b>
-                  <em>Share a read only key so an auditor verifies payouts without exposing funds.</em>
-                </span>
-              </li>
-            </ul>
-          </div>
+      {/* invoices */}
+      <section id="invoices" className="landing-section">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="landing-kicker">Getting paid</div>
+          <h2 className="landing-h2">You bill, your client pays, the chain settles it.</h2>
+          <p className="landing-lead mx-auto">
+            Create an invoice in NEAR or USDC and send the link. Your client opens it in any browser,
+            pays from their own Meteor or HERE wallet, and the money lands in your NEAR vault. The
+            invoice only closes when the chain proves your vault received the exact amount.
+          </p>
         </div>
-        <img src="/img/hr-directory.svg" className="mock" alt="Team directory: eight people as tiles with privacy rings, filter pills and an audit viewing key panel" />
+        <div className="feature-grid mt-10">
+          {[
+            ["01", "Pick the token", "You choose whether the client pays in NEAR or USDC when you create the invoice. They pay in exactly that token."],
+            ["02", "They pay in a popup", "One button opens their wallet, they approve the transfer, and no seed phrase or password ever touches the page."],
+            ["03", "Confirmed on chain", "NearHr reads the transaction from the chain. Your vault credited the exact amount, so the invoice marks itself paid."],
+          ].map(([n, title, body]) => (
+            <div key={title} className="feature-card">
+              <div className="flex items-center justify-between">
+                <span className="mono text-xs text-[var(--color-faint)]">STEP {n}</span>
+                <span className="pill pill-green">{title.toUpperCase()}</span>
+              </div>
+              <h3 className="mt-4 text-[22px]">{title}</h3>
+              <p className="mt-3 text-[13.5px] leading-relaxed text-[var(--color-muted)]">{body}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* how it pays */}
@@ -313,21 +276,21 @@ export default function Home() {
         <img src="/img/flow.svg" className="mock" alt="Payroll in three steps: import, validate, payout" />
       </section>
 
-      {/* privacy levels */}
-      <section id="privacy" className="landing-section">
+      {/* transparency */}
+      <section id="transparency" className="landing-section">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="landing-kicker">Privacy, in levels</div>
-          <h2 className="landing-h2">Choose how private each payday is.</h2>
+          <div className="landing-kicker">Transparency, by default</div>
+          <h2 className="landing-h2">Every payday, verifiable on chain.</h2>
         </div>
         <div className="feature-grid mt-10">
           {[
-            ["01", "Transparent", "Standard onchain payout to each employee account. Cheap, instant, fully public."],
-            ["02", "Shielded", "Each payment lands in a one time stealth account. Only the recipient can claim it."],
-            ["03", "Compliant", "Shielded, plus a viewing key lets your auditor verify every payment without exposing who got paid."],
+            ["01", "Real accounts", "Each payment goes straight to a real NEAR account. The wallet, the amount and the receipt are all public on the explorer."],
+            ["02", "Public receipts", "Every payout leaves a transaction anyone can inspect. No hidden wallets, no claim steps, no second phase."],
+            ["03", "Auditable runs", "A full onchain record per run, and a PDF statement on demand. Your auditor verifies the whole payroll from the ledger."],
           ].map(([n, title, body]) => (
             <div key={title} className="feature-card">
               <div className="flex items-center justify-between">
-                <span className="mono text-xs text-[var(--color-faint)]">LEVEL {n}</span>
+                <span className="mono text-xs text-[var(--color-faint)]">STEP {n}</span>
                 <span className="pill pill-green">{title.toUpperCase()}</span>
               </div>
               <h3 className="mt-4 text-[22px]">{title}</h3>
@@ -337,11 +300,10 @@ export default function Home() {
         </div>
         <div className="mx-auto mt-16 max-w-3xl text-center">
           <div className="landing-kicker">The ledger</div>
-          <h2 className="landing-h2">Every payout, recorded and auditable.</h2>
+          <h2 className="landing-h2">Every payout, recorded and verifiable.</h2>
           <p className="landing-lead mx-auto">
             The dashboard keeps a running ledger of each run and each payment, with status, asset
-            and a link back to the onchain transaction. Your auditor gets a viewing key; your team
-            stays private.
+            and a link back to the onchain transaction. Anyone can follow the money on NEAR.
           </p>
         </div>
         <img src="/img/ledger.svg" className="mock" alt="Payout ledger with recent payroll entries" />
@@ -350,16 +312,16 @@ export default function Home() {
       {/* cta */}
       <section className="landing-section">
         <div className="landing-cta">
-          <div className="landing-kicker">Mainnet ready</div>
+          <div className="landing-kicker">Running on NEAR</div>
           <h2 className="mx-auto mt-3 max-w-2xl font-[var(--font-display)] text-[clamp(30px,4vw,52px)] font-bold leading-tight tracking-[-0.03em]">
             Start paying your team on NEAR today.
           </h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link href="/api/auth/google/start" className="btn btn-primary">
-              Open your wallet
+              Open your account
             </Link>
-            <Link href="/login" className="btn btn-ghost landing-cta-ghost">
-              Sign in
+            <Link href="/docs" className="btn btn-ghost landing-cta-ghost">
+              Read the docs
             </Link>
           </div>
         </div>
@@ -371,7 +333,7 @@ export default function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/img/nearhr-logo-crop.png" alt="NearHr" className="h-7 w-auto rounded-lg object-contain" />
         </div>
-        <span>NEAR Protocol · SIP stealth addresses · custodial smart accounts</span>
+        <span>NEAR Protocol · onchain receipts · custodial smart accounts</span>
         <span>© 2026 NearHr</span>
       </footer>
     </main>

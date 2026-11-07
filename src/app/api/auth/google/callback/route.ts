@@ -17,10 +17,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=missing_params", req.url));
   }
   const db = getDb();
-  const row = db.prepare("SELECT verifier FROM oauth_states WHERE state = ?").get(state) as
-    | { verifier: string }
-    | undefined;
+  const row = db
+    .prepare("SELECT verifier, next_url FROM oauth_states WHERE state = ?")
+    .get(state) as { verifier: string; next_url: string | null } | undefined;
   const verifier = row?.verifier;
+  const next = row?.next_url ?? null;
   db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state); // single use
   if (!verifier) {
     return NextResponse.redirect(new URL("/login?error=bad_state", req.url));
@@ -46,9 +47,10 @@ export async function GET(req: NextRequest) {
   // Secure only on real HTTPS — a Secure cookie set over http://localhost
   // would be dropped by browsers (NODE_ENV=production is not a reliable signal).
   const secure = req.url.startsWith("https");
-  const res = NextResponse.redirect(new URL("/dashboard", req.url));
+  const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+  const res = NextResponse.redirect(new URL(dest, req.url));
   res.cookies.set(COOKIE, token, sessionCookieOptions(secure));
   res.cookies.set(COOKIE + "_exp", expiresAt.toISOString(), sessionCookieOptions(secure));
-  console.log(`[auth] session issued, redirecting to /dashboard (secure=${secure})`);
+  console.log(`[auth] session issued, redirecting to ${dest} (secure=${secure})`);
   return res;
 }

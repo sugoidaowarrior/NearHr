@@ -23,9 +23,7 @@ export async function POST(req: NextRequest) {
       email: e.email,
       name: e.name,
       amount: e.amount,
-      privacy: e.privacy ?? null,
       hasAccount: !!e.nearAccount,
-      hasStealth: !!e.stealthMeta,
     })),
   });
 }

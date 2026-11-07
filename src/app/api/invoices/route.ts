@@ -1,0 +1,35 @@
+import { NextRequest, NextResponse } from "next/server";
+import { resolveSession, COOKIE } from "@/lib/sessions";
+import { createInvoice, listInvoices } from "@/lib/invoices";
+
+// GET  /api/invoices -> the employer's invoices (newest first)
+// POST /api/invoices -> create an invoice (asset: "USDC" | "NEAR"), returns it with its public link
+export async function GET(req: NextRequest) {
+  const userId = resolveSession(req.cookies.get(COOKIE)?.value);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  return NextResponse.json({ invoices: listInvoices(userId) });
+}
+
+export async function POST(req: NextRequest) {
+  const userId = resolveSession(req.cookies.get(COOKIE)?.value);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "bad json" }, { status: 400 });
+  }
+  try {
+    const inv = createInvoice(userId, {
+      client_name: body.client_name ?? body.clientName ?? "",
+      client_email: body.client_email ?? body.clientEmail ?? null,
+      note: body.note ?? null,
+      amount: String(body.amount ?? ""),
+      due_date: body.due_date ?? body.dueDate ?? "",
+      asset: body.asset === "NEAR" ? "NEAR" : "USDC",
+    });
+    return NextResponse.json({ invoice: inv, payUrl: `/i/${inv.slug}` }, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+  }
+}

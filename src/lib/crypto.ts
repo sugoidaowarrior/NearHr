@@ -4,7 +4,7 @@
  * Threat model (MVP, custodial):
  *  - Every user account has a NEAR master key (ed25519) that controls a
  *    custodial NEAR smart-account contract (M13) holding funds.
- *  - The master key + SIP stealth keys are stored in SQLite encrypted with
+ *  - The master key is stored in SQLite encrypted with
  *    AES-256-GCM under an envelope key: DEK derived from the user's chosen
  *    backup passphrase (PBKDF2, 210k iters), then wrapped by a server key
  *    (KMS_KEY) so a leaked DB is useless without the passphrase AND the
@@ -35,9 +35,6 @@ function kms() {
 
 export interface VaultPlaintext {
   nearMasterKey: string; // hex (64) or base58 NEAR seed
-  sipSpendingKey: string; // hex, SIP stealth spending private key
-  sipViewingKey: string; // hex, SIP stealth viewing private key
-  sipMetaAddress: string; // encoded sip:near:... meta address
   nearAccount: string; // NEAR account id of the smart account
   createdAt: string;
   [extra: string]: string;

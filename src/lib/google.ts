@@ -32,10 +32,17 @@ export interface OAuthStart {
   url: string;
   state: string;
   verifier: string;
+  next: string;
 }
 
-/** Build the Google consent URL + PKCE verifier (to store server-side in state). */
-export function startOAuth(): OAuthStart {
+/**
+ * Build the Google consent URL + PKCE verifier (to store server-side in state).
+ * `nextPath` is where to send the user after login (defaults to /dashboard);
+ * only single slash relative paths are accepted.
+ */
+export function startOAuth(nextPath?: string): OAuthStart {
+  const next =
+    nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/dashboard";
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const state = randomBytes(16).toString("base64url");
@@ -49,7 +56,7 @@ export function startOAuth(): OAuthStart {
     code_challenge_method: "S256",
     prompt: "select_account",
   });
-  return { url: `${GOOGLE_AUTH_BASE}?${params.toString()}`, state, verifier };
+  return { url: `${GOOGLE_AUTH_BASE}?${params.toString()}`, state, verifier, next };
 }
 
 /** Exchange the auth code for tokens, then fetch the user's profile. */

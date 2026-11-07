@@ -149,7 +149,7 @@ export async function sendOneOff(
   const cfg = defaultNearConfig();
   if (asset === "USDC") {
     // USDC.e storage: first USDC activity on a fresh vault needs registration
-    // (0.125 NEAR, idempotent) or the ft_transfer fails.
+    // (live storage minimum, idempotent) or the ft_transfer fails.
     await ensureUsdcRegistration(account, cfg);
   }
   const tx =

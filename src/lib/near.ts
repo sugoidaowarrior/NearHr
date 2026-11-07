@@ -25,7 +25,7 @@ import {
   teraToGas,
   formatNearAmount,
 } from "near-api-js";
-import { USDC as USDC_TEST } from "near-api-js/tokens/testnet";
+import { actionCreators } from "@near-js/transactions";
 
 /**
  * Mainnet token contracts (single source of truth).
@@ -38,9 +38,19 @@ export const REF_CONTRACT = "v2.ref-finance.near";
 export const WNEAR_ID = "wrap.near";
 export const USDC_E_ID = "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near";
 
-/** Mainnet USDC = USDC.e (bridged, Ref Finance liquid). Testnet keeps its own. */
-function usdcContractId(networkId: string): string {
-  return networkId === "mainnet" ? USDC_E_ID : USDC_TEST.accountId;
+/**
+ * Circle's native USDC on NEAR testnet. This is the contract Circle's faucet
+ * mints to: payers funded from the Circle Arc faucet hold their balance and
+ * storage record here (verified on chain). near-api-js's USDC_TEST
+ * (`usdc.fakes.testnet`) is a different, non-Circle contract that those payers
+ * are not registered on, so pointing at it made every transfer panic with
+ * "The account X is not registered".
+ */
+const USDC_CIRCLE_TESTNET = "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af";
+
+/** USDC contract id for the active network (testnet: Circle's native USDC, mainnet: USDC.e). */
+export function usdcContractId(networkId: string): string {
+  return networkId === "mainnet" ? USDC_E_ID : USDC_CIRCLE_TESTNET;
 }
 
 export interface NearConfig {
@@ -55,7 +65,7 @@ export function defaultNearConfig(): NearConfig {
     networkId: network,
     nodeUrl:
       env.NEAR_NODE_URL ||
-      (network === "mainnet" ? "https://free.rpc.fastnear.com" : "https://rpc.testnet.near.org"),
+      (network === "mainnet" ? "https://free.rpc.fastnear.com" : "https://test.rpc.fastnear.com"),
   };
 }
 
@@ -64,7 +74,16 @@ export function defaultNearConfig(): NearConfig {
  * (it 429s and warns to switch), so it stays only as the last resort.
  */
 export function rpcCandidates(network: string): string[] {
-  if (network !== "mainnet") return ["https://rpc.testnet.near.org"];
+  if (network !== "mainnet") {
+    // rpc.testnet.near.org is deprecated and now hard 429s, so the working
+    // public testnet endpoints come first and it is the last resort.
+    return [
+      "https://test.rpc.fastnear.com",
+      "https://rpc.testnet.fastnear.com",
+      "https://archival-rpc.testnet.near.org",
+      "https://rpc.testnet.near.org",
+    ];
+  }
   return [
     "https://free.rpc.fastnear.com",
     "https://rpc.mainnet.fastnear.com",
@@ -131,6 +150,130 @@ export function nearProvider(cfg: NearConfig = defaultNearConfig()): JsonRpcProv
 /** Build an Account handle from a stored account id + master key. */
 export function accountFromVault(accountId: string, masterKeyBase58: string): Account {
   return new Account(accountId, nearProvider(), masterKeyBase58 as never);
+}
+
+/** Explorer URL for a tx hash on the active network. */
+export function explorerUrl(networkId: string, txHash: string): string {
+  const base =
+    networkId === "mainnet" ? "https://explorer.near.org" : "https://explorer.testnet.near.org";
+  return `${base}/transactions/${txHash}`;
+}
+
+const HEX64_RE = /^[0-9a-f]{64}$/i;
+const B58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,55}$/;
+
+function b58ToHex(s: string): string | null {
+  const A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let n = 0n;
+  for (const c of s) {
+    const i = A.indexOf(c);
+    if (i < 0) return null;
+    n = n * 58n + BigInt(i);
+  }
+  const bytes: number[] = [];
+  while (n > 0n) {
+    bytes.unshift(Number(n % 256n));
+    n /= 256n;
+  }
+  for (const c of s) {
+    if (c === "1") bytes.unshift(0);
+    else break;
+  }
+  if (bytes.length !== 32) return null;
+  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function b64ToHex(s: string): string | null {
+  try {
+    const b = Buffer.from(s, "base64");
+    if (b.length !== 32) return null;
+    return b.toString("hex");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize a tx hash in any of the encodings we may see to the canonical 64
+ * hex CryptoHash: 64 hex (RPC), base58 (explorer + some wallets), base64
+ * (other wallets). Returns "" when the input is not a recognizable hash.
+ */
+export function normalizeTxHash(input: string): string {
+  let t = String(input ?? "").trim();
+  if (!t) return "";
+  // A pasted explorer URL carries the hash in the last path segment.
+  if (/^https?:\/\//i.test(t)) {
+    const m = t.match(/\/transactions\/([A-Za-z0-9+/=]+)/i);
+    if (!m) return "";
+    t = m[1];
+  }
+  if (HEX64_RE.test(t)) return t.toLowerCase();
+  if (B58_RE.test(t)) return b58ToHex(t) ?? "";
+  if (/^[A-Za-z0-9+/]{40,48}={0,2}$/.test(t)) return b64ToHex(t) ?? "";
+  return "";
+}
+
+/**
+ * Raw tx status RPC: fetch a fully executed transaction by hash + signer id.
+ * The modern nearcore node takes the tx method with a BASE58 encoded hash and
+ * `sender_account_id` (hex or other encodings are rejected with a parse
+ * error), and `EXPERIMENTAL_tx_status` is the variant that returns the
+ * receipt list we verify against. We fail over across the public endpoints
+ * and across the two method names (newer nodes renamed it to `tx_status`).
+ * Returns the FinalExecutionOutcome: { final_execution_status, status,
+ * transaction, receipts[] }. This is the primitive for trustless server side
+ * payment verification: the server reads the real on chain outcome, so a
+ * payer can not claim a payment that never happened.
+ */
+const TX_STATUS_METHODS = ["EXPERIMENTAL_tx_status", "tx_status"];
+
+function hexToB58(hex: string): string {
+  const A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let n = BigInt("0x" + hex);
+  let s = "";
+  while (n > 0n) {
+    s = A[Number(n % 58n)] + s;
+    n /= 58n;
+  }
+  for (const c of hex) {
+    if (c === "0") s = "1" + s;
+    else break;
+  }
+  return s;
+}
+
+export async function queryTx(txHash: string, senderId: string) {
+  const cfg = defaultNearConfig();
+  const urls = Array.from(new Set([cfg.nodeUrl, ...rpcCandidates(cfg.networkId)]));
+  const b58 = hexToB58(txHash);
+  let lastErr: unknown = null;
+  for (const url of urls) {
+    for (const method of TX_STATUS_METHODS) {
+      try {
+        const res = (await providerFor(url).sendJsonRpc(method as never, {
+          tx_hash: b58,
+          sender_account_id: senderId,
+          wait_until: "EXECUTED_OPTIMISTIC",
+        })) as unknown as {
+          final_execution_status?: string;
+          status?: unknown;
+          transaction?: unknown;
+          transaction_outcome?: unknown;
+          receipts_outcome?: { id: string; outcome: Record<string, unknown> }[];
+          receipts?: {
+            receipt_id: string;
+            receiver_id: string;
+            predecessor_id: string;
+            receipt?: { Action?: { actions?: unknown[] } };
+          }[];
+        };
+        return res;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 /** "1.5" (human NEAR) -> yocto bigint. */
@@ -204,9 +347,30 @@ export async function sendNear(from: Account, to: string, yoctoAmount: bigint): 
 }
 
 /**
+ * Live USDC storage minimum (base yoctoNEAR). The contract computes it from
+ * current storage usage, so it grows over time: read it, do not hardcode it.
+ * Falls back to a safe 2x the last observed minimum when the view call fails.
+ */
+export async function usdcStorageMin(cfg: NearConfig = defaultNearConfig()): Promise<bigint> {
+  const contractId = usdcContractId(cfg.networkId);
+  try {
+    const text = (await rawViewFailover(contractId, "storage_balance_bounds", {})).trim();
+    const b = JSON.parse(text) as { min?: string };
+    const min = BigInt(String(b.min ?? "0"));
+    if (min > 0n) return min;
+  } catch {
+    /* fall through to the fallback */
+  }
+  // Last observed minimum on chain. Attaching above max panics, so this is the
+  // exact observed value, not a padded guess.
+  return 1250000000000000000000n;
+}
+
+/**
  * USDC.e (nep141) registration: the vault must own a storage record on the
- * token contract before it can hold USDC (mainnet cost: 0.125 NEAR, verified
- * against storage_balance_bounds). Idempotent: no-op when already registered.
+ * token contract before it can hold USDC. Cost is the live storage minimum
+ * (verified against storage_balance_bounds on chain). Idempotent: no-op when
+ * already registered.
  */
 export async function ensureUsdcRegistration(
   account: Account,
@@ -226,7 +390,7 @@ export async function ensureUsdcRegistration(
     methodName: "storage_deposit",
     args: { registration_only: true, account_id: owner },
     gas: teraToGas(30),
-    deposit: toYocto("0.125"),
+    deposit: await usdcStorageMin(cfg),
   })) as unknown;
   const { failed } = parseTx(dep);
   if (failed) throw new Error(`USDC registration failed: ${failed}`);
@@ -248,8 +412,50 @@ export async function sendUsdc(
     methodName: "ft_transfer",
     args: { receiver_id: to, amount: amountBase.toString() },
     gas: teraToGas(30),
-    deposit: 0n,
+    deposit: 1n, // NEP-141 requires exactly 1 yoctoNEAR attached to ft_transfer
   })) as unknown;
+  const { txHash, failed } = parseTx(res);
+  if (failed) throw new Error(`USDC transfer failed: ${failed}`);
+  return { txHash, status: "Success" };
+}
+
+/**
+ * Send USDC from the payer to the employer's vault, and in the SAME
+ * transaction register the vault on the token contract. The one time
+ * registration costs the live storage minimum (read on demand) and is paid
+ * by the payer (the vault is an implicit account that is usually empty, so
+ * it can not pay for its own record). If the vault already has a record, the
+ * contract refunds the whole deposit, so paying twice is safe. Actions
+ * execute in order: the record exists before the transfer runs.
+ */
+export async function sendUsdcToVault(
+  from: Account,
+  to: string,
+  amountBase: bigint,
+  cfg: NearConfig = defaultNearConfig(),
+  registrationDeposit?: bigint
+): Promise<TxResult> {
+  const contractId = usdcContractId(cfg.networkId);
+  const reg = registrationDeposit ?? (await usdcStorageMin(cfg));
+  // v7 (@near-js/transactions 2.5.x) serializes actions with borsh using the
+  // camelCase Action schema (functionCall.methodName, args as JSON bytes).
+  // Hand built PascalCase objects (FunctionCall.method_name + base64 args)
+  // are rejected by that schema, so always build via actionCreators.
+  const actions = [
+    actionCreators.functionCall(
+      "storage_deposit",
+      { account_id: to },
+      teraToGas(30),
+      reg
+    ),
+    actionCreators.functionCall(
+      "ft_transfer",
+      { receiver_id: to, amount: amountBase.toString() },
+      teraToGas(30),
+      1n // NEP-141 requires exactly 1 yoctoNEAR attached to ft_transfer
+    ),
+  ];
+  const res = (await from.signAndSendTransaction({ receiverId: contractId, actions })) as unknown;
   const { txHash, failed } = parseTx(res);
   if (failed) throw new Error(`USDC transfer failed: ${failed}`);
   return { txHash, status: "Success" };

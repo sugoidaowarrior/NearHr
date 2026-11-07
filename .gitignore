@@ -44,3 +44,6 @@ next-env.d.ts
 # hushpay
 data/
 .env.local
+
+# near sdk contract build output
+contracts/invoice-contract/target/

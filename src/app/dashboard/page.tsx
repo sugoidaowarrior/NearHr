@@ -37,7 +37,6 @@ type Employee = {
   frequency: string;
   payDay: number | null;
   status: string;
-  privacy?: string;
   lastPaidAt: string | null;
   lastPaidAmount: string | null;
   lastPaidAsset: string | null;
@@ -73,7 +72,6 @@ type RunItem = {
   email: string;
   name: string;
   amount: string;
-  privacy: string;
   status: string;
   tx_ref: string | null;
   error: string | null;
@@ -82,7 +80,6 @@ type Run = {
   id: string;
   name: string;
   asset: string;
-  privacy: string;
   status: string;
   employee_count: number;
   total_yocto: string;
@@ -186,13 +183,6 @@ const nameInitials = (name: string) =>
     .join("")
     .toUpperCase() || "?";
 
-/** Privacy levels shown in the team directory. Ring + label colours. */
-const PRIVACY_META: Record<string, { label: string; color: string; pill: string }> = {
-  transparent: { label: "transparent", color: "#4ade80", pill: "pill-green" },
-  shielded: { label: "shielded", color: "#60a5fa", pill: "pill-blue" },
-  compliant: { label: "compliant", color: "#d580d0", pill: "pill-magenta" },
-};
-const privacyMeta = (p?: string) => PRIVACY_META[p ?? "transparent"] ?? PRIVACY_META.transparent;
 const fmtDate = (s: string | null) => {
   if (!s) return "never";
   const d = new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z");
@@ -553,7 +543,6 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
-  const [network, setNetwork] = useState("mainnet");
   const [account, setAccount] = useState<string | null>(null);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -569,12 +558,11 @@ export default function Dashboard() {
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [empModal, setEmpModal] = useState<null | { editing: Employee | null }>(null);
   const [payrollOpen, setPayrollOpen] = useState(false);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [auditOpen, setAuditOpen] = useState(false);
+  const [invoicesOpen, setInvoicesOpen] = useState(false);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [statementOpen, setStatementOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [empPrivacy, setEmpPrivacy] = useState<"all" | "transparent" | "shielded" | "compliant">("all");
-  const [vaultAccount, setVaultAccount] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>("NGN");
   const [currencyOpen, setCurrencyOpen] = useState(false);
 
@@ -609,18 +597,16 @@ export default function Dashboard() {
       const cur: Currency = (["NGN", "USD", "EUR"].includes(me.user?.display_currency) ? me.user.display_currency : "NGN") as Currency;
       setCurrency(cur);
       // Every user is an HR operator of their own workspace.
-      const [pf, emps, pay, sch, runRes, sal, vlt] = await Promise.all([
+      const [pf, emps, pay, sch, runRes, sal] = await Promise.all([
         api("/api/portfolio").catch(() => null),
         api("/api/employees").catch(() => ({ employees: [] })),
         api("/api/payments").catch(() => ({ payments: [] })),
         api("/api/schedule").catch(() => null),
         api("/api/payroll/runs").catch(() => ({ runs: [] })),
         api("/api/payroll/summary").catch(() => null),
-        api("/api/vault").catch(() => null),
       ]);
       if (pf) {
         setPrices(pf.prices);
-        setNetwork(pf.network);
         setAccount(pf.account);
       }
       setEmployees(emps.employees);
@@ -628,7 +614,6 @@ export default function Dashboard() {
       setSchedule(sch?.schedule ?? null);
       setRuns(runRes.runs);
       setSalary(sal ?? null);
-      setVaultAccount(vlt?.vault?.nearAccount ?? null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "unauthorized") router.replace("/login");
@@ -651,16 +636,20 @@ export default function Dashboard() {
     }
   }, []);
 
+  const loadInvoices = useCallback(async () => {
+    try {
+      const d = await api("/api/invoices");
+      setInvoices(d.invoices ?? []);
+    } catch {
+      /* invoices are non fatal */
+    }
+  }, []);
+
   useEffect(() => {
     loadFast();
     loadBalance();
-    // Warm the swap pool cache in the background so the swap modal's first
-    // quote never waits on a cold pool scan.
-    const t = setTimeout(() => {
-      api("/api/swap?from=NEAR&to=USDC&amount=1&slippage=0.5").catch(() => null);
-    }, 1200);
-    return () => clearTimeout(t);
-  }, [loadFast, loadBalance]);
+    loadInvoices();
+  }, [loadFast, loadBalance, loadInvoices]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([loadFast(), loadBalance(true)]);
@@ -738,10 +727,10 @@ export default function Dashboard() {
   );
 
   const sendOneOff = useCallback(
-    async (input: { to: string; asset: string; amount: string; note?: string; privacy?: string; employeeId?: string | null }) => {
+    async (input: { to: string; asset: string; amount: string; note?: string; employeeId?: string | null }) => {
       try {
         await api("/api/send", { method: "POST", body: JSON.stringify(input) });
-        notify("ok", `sent ${input.amount} ${input.asset} to ${shortAddr(input.to)}${input.privacy && input.privacy !== "transparent" ? ` (${input.privacy})` : ""}`);
+        notify("ok", `sent ${input.amount} ${input.asset} to ${shortAddr(input.to)}`);
         setBalance(null);
         setBalanceLoading(true);
         setTimeout(() => loadBalance(), 1500);
@@ -784,7 +773,7 @@ export default function Dashboard() {
       try {
         const created = await api("/api/payroll", {
           method: "POST",
-          body: JSON.stringify({ name: `Payroll ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`, asset, privacy: "transparent", csv }),
+          body: JSON.stringify({ name: `Payroll ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`, asset, csv }),
         });
         const result = await api(`/api/payroll/runs/${created.runId}/execute`, { method: "POST" });
         notify("ok", `payroll executed: ${result.executed} paid, ${result.failed} failed`);
@@ -861,14 +850,17 @@ export default function Dashboard() {
     );
   }
 
-  const assetOf = (a: "NEAR" | "USDC") =>
-    balance ? balance[a === "NEAR" ? "near" : "usdc"].human : "…";
+  const assetOf = (a: "NEAR" | "USDC") => {
+    if (!balance) return "…";
+    const h = balance[a === "NEAR" ? "near" : "usdc"].human;
+    // NEAR arrives with full 24 digit precision; the balance card wants 2 decimals.
+    return a === "NEAR" ? Number(h).toFixed(2) : h;
+  };
   const nearAmt = balance ? Number(balance.near.human) : 0;
   const usdcAmt = balance ? Number(balance.usdc.human) : 0;
   const spark = (i: number, k = 26) =>
     Array.from({ length: k }, (_, j) => 50 + 32 * seeded(i * 131 + j * 7) + 14 * Math.sin(j / 2.1 + i));
   const filteredEmps = employees.filter((e) => {
-    if (empPrivacy !== "all" && (e.privacy ?? "transparent") !== empPrivacy) return false;
     if (!query) return true;
     return [e.name, e.email ?? "", e.department ?? "", e.wallet, e.jobTitle ?? ""]
       .join(" ")
@@ -913,15 +905,16 @@ export default function Dashboard() {
             <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
           </svg>
         </button>
-        <button className="rail-btn" title="Swap" onClick={() => setSwapOpen(true)}>
+        <button className="rail-btn" title="Invoices" onClick={() => setInvoicesOpen(true)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M7 8h13l-3-3M17 16H4l3 3" />
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <path d="M8 7h8M8 11h8M8 15h5" />
           </svg>
         </button>
-        <button className="rail-btn" title="Audit spending" onClick={() => setAuditOpen(true)}>
+        <button className="rail-btn" title="Payroll statement" onClick={() => setStatementOpen(true)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" />
-            <path d="M9 12l2 2 4-4" />
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6M9 13h6M9 17h4" />
           </svg>
         </button>
         <div className="rail-spacer" />
@@ -1153,9 +1146,9 @@ export default function Dashboard() {
             <div className="stat-card fade-up d2">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-                  USDC.e
+                  USDC
                   <span
-                    title="USDC.e is the bridged version of Circle's USDC that runs natively on NEAR (nep141 token). The swap pools and payroll rails on NEAR hold USDC.e, so NearHr standardises on it. 1 USDC.e stays redeemable for 1 USDC."
+                    title="USDC on NEAR, a nep141 token with 6 decimals. Clients pay invoices in it and it lands directly in your vault."
                     className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-[var(--color-rule)] text-[9px] font-bold text-[var(--color-faint)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                   >
                     ?
@@ -1224,8 +1217,8 @@ export default function Dashboard() {
                   <button className="btn btn-primary btn-sm" onClick={() => setPayrollOpen(true)}>New payroll</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setSendOpen(true)}>Send</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setReceiveOpen(true)}>Receive</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setSwapOpen(true)}>Swap</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setAuditOpen(true)}>Audit</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setInvoicesOpen(true)}>Invoices</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setStatementOpen(true)}>Statement</button>
                 </div>
                 <div className="mt-4 border-t border-[var(--color-rule)] pt-4">
                   <div className="mb-2.5 flex items-center justify-between text-xs text-[var(--color-faint)]">
@@ -1302,7 +1295,6 @@ export default function Dashboard() {
                   <h3 className="text-[15px] font-bold tracking-tight">Team directory</h3>
                   <p className="mt-0.5 text-xs text-[var(--color-faint)]">
                     {employees.length} {employees.length === 1 ? "person" : "people"}
-                    {" · "}3 privacy levels
                   </p>
                 </div>
                 <div className="flex flex-none flex-col items-end gap-2.5">
@@ -1312,48 +1304,6 @@ export default function Dashboard() {
                     </svg>
                     Add person
                   </button>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    {(["all", "transparent", "shielded", "compliant"] as const).map((lvl) => {
-                      const count =
-                        lvl === "all"
-                          ? employees.length
-                          : employees.filter((e) => (e.privacy ?? "transparent") === lvl).length;
-                      const active = empPrivacy === lvl;
-                      const c =
-                        lvl === "all"
-                          ? "#4d65ff"
-                          : lvl === "transparent"
-                            ? "#4ade80"
-                            : lvl === "shielded"
-                              ? "#60a5fa"
-                              : "#d580d0";
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => setEmpPrivacy(lvl)}
-                          aria-pressed={active}
-                          className="tfilter"
-                          style={
-                            active && c
-                              ? {
-                                  borderColor: `color-mix(in srgb, ${c} 55%, transparent)`,
-                                  background: `color-mix(in srgb, ${c} 12%, transparent)`,
-                                  color: "var(--color-ink)",
-                                }
-                              : undefined
-                          }
-                        >
-                          {lvl}
-                          <span
-                            className="mono"
-                            style={active && c ? { color: c } : undefined}
-                          >
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               </div>
 
@@ -1377,13 +1327,12 @@ export default function Dashboard() {
                 ) : (
                   <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
                     {filteredEmps.map((e) => {
-                      const meta = privacyMeta(e.privacy);
                       return (
-                        <div key={e.id} className="member-card" title={`${e.name} · ${meta.label} privacy`}>
+                        <div key={e.id} className="member-card" title={e.name}>
                           <div className="flex items-start justify-between gap-1">
                             <div
                               className="member-ring flex-none"
-                              style={{ boxShadow: `0 0 0 2px ${meta.color}`, color: meta.color }}
+                              style={{ boxShadow: `0 0 0 2px #4d65ff`, color: "#4d65ff" }}
                             >
                               {e.avatar && e.avatar.startsWith("data:image/") ? (
                                 <img src={e.avatar} alt={e.name} className="member-photo" />
@@ -1391,7 +1340,6 @@ export default function Dashboard() {
                                 <span className="text-[15px] font-extrabold">{nameInitials(e.name)}</span>
                               )}
                             </div>
-                            <span className="h-2 w-2 flex-none rounded-full" style={{ background: meta.color }} />
                           </div>
                           <div className="mt-2.5 min-w-0">
                             <div className="truncate text-[13px] font-semibold">{e.name}</div>
@@ -1435,39 +1383,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="card-2 mt-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 px-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="grid h-9 w-9 flex-none place-items-center rounded-lg border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)]">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
-                      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
-                      <path d="M9 12l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-semibold">Audit viewing key</div>
-                    <div className="mt-0.5 text-[11px] leading-snug text-[var(--color-faint)]">
-                      A read only key lets any auditor verify stealth payouts on chain. It never exposes funds.
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-none items-center gap-2">
-                  <span className="mono max-w-[220px] truncate text-[11px] text-[var(--color-muted)]">
-                    {vaultAccount ? shortAddr(vaultAccount) : "no vault yet"}
-                  </span>
-                  {vaultAccount && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: "3px 10px" }}
-                      onClick={() => {
-                        navigator.clipboard?.writeText(vaultAccount);
-                        notify("ok", "viewing account copied");
-                      }}
-                    >
-                      Copy
-                    </button>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className="glass fade-up d4 flex flex-col p-5 lg:col-span-5">
@@ -1510,7 +1425,7 @@ export default function Dashboard() {
                         <div>
                           <div className="text-sm font-semibold">{r.name}</div>
                           <div className="text-xs text-[var(--muted-2)]">
-                            {r.employee_count} people · {r.asset} · {r.privacy} · created {fmtDate(r.created_at)}
+                            {r.employee_count} people · {r.asset} · created {fmtDate(r.created_at)}
                           </div>
                         </div>
                         <span
@@ -1624,17 +1539,15 @@ export default function Dashboard() {
       )}
       {sendOpen && <SendModal employees={employees} onClose={() => setSendOpen(false)} onSend={sendOneOff} />}
       {receiveOpen && account && <ReceiveModal address={account} onClose={() => setReceiveOpen(false)} />}
-      {swapOpen && (
-        <SwapModal
-          prices={prices}
-          onClose={() => setSwapOpen(false)}
-          onDone={() => {
-            setSwapOpen(false);
-            refreshAll();
-          }}
+      {invoicesOpen && (
+        <InvoicesModal
+          invoices={invoices}
+          reload={loadInvoices}
+          notify={notify}
+          onClose={() => setInvoicesOpen(false)}
         />
       )}
-      {auditOpen && <AuditModal onClose={() => setAuditOpen(false)} />}
+      {statementOpen && <StatementModal onClose={() => setStatementOpen(false)} />}
       {empModal && (
         <EmployeeModal
           employee={empModal.editing}
@@ -1663,226 +1576,301 @@ export default function Dashboard() {
   );
 }
 
-/* ── swap modal (NEAR ↔ USDC.e via Ref Finance, mainnet) ────────────── */
-function SwapModal({ onClose, onDone, prices }: { onClose: () => void; onDone: () => void; prices: Prices | null }) {
-  const [fromAsset, setFromAsset] = useState<"NEAR" | "USDC">("NEAR");
+/* ── invoices modal: bill a client, they pay any token on any chain ─── */
+const INV_STATUS: Record<string, { label: string; cls: string }> = {
+  open: { label: "open", cls: "bg-[var(--color-bg)] text-[var(--color-muted)]" },
+  pending: { label: "awaiting deposit", cls: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]" },
+  paid: { label: "paid", cls: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]" },
+  refunded: { label: "refunded", cls: "bg-[var(--color-bg)] text-[var(--color-muted)]" },
+  void: { label: "void", cls: "bg-[var(--color-bg)] text-[var(--color-faint)]" },
+};
+
+function InvoicesModal({
+  invoices,
+  reload,
+  notify,
+  onClose,
+}: {
+  invoices: any[];
+  reload: () => Promise<void>;
+  notify: (kind: "ok" | "err", msg: string) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"list" | "new">("list");
+  const [created, setCreated] = useState<any | null>(null);
+  const [client, setClient] = useState("");
+  const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
-  const [slippage, setSlippage] = useState(0.5);
-  const [quote, setQuote] = useState<{ expectedOut: string; minOut: string; rate: number; poolId: number; slippage: number } | null>(null);
-  const [intents, setIntents] = useState<{ expectedOut: string; minOut: string; rate: number } | null>(null);
-  const [quoteErr, setQuoteErr] = useState("");
-  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [asset, setAsset] = useState<"USDC" | "NEAR">("USDC");
+  const [dueDate, setDueDate] = useState("");
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [refundBusy, setRefundBusy] = useState<string | null>(null);
+  const [err, setErr] = useState("");
 
-  const toAsset: "NEAR" | "USDC" = fromAsset === "NEAR" ? "USDC" : "NEAR";
   const amtNum = Number(amount);
-  const hasAmt = amtNum > 0;
 
-  // Instant estimate from the last known rate, shown while the exact on chain
-  // quote is still in flight so the number never freezes while typing.
-  const previewOut = hasAmt && quote ? amtNum * quote.rate : null;
-  const fmtPreview = (n: number) => String(Number(n.toFixed(4)));
-
-  const usdValue = (asset: "NEAR" | "USDC", amt: number) =>
-    prices ? usd(amt * (asset === "NEAR" ? prices.NEAR : prices.USDC)) : null;
-
-  // Flipping direction invalidates the rate; reset only then. Amount changes
-  // keep the stale quote visible (it powers the instant estimate above).
-  useEffect(() => {
-    setQuote(null);
-    setIntents(null);
-    setQuoteErr("");
-  }, [fromAsset, toAsset]);
-
-  useEffect(() => {
-    let live = true;
-    // Always quote (1 unit when the field is empty) so the live rate shows the
-    // moment the modal opens. Debounced while typing so each keystroke does
-    // not burn a round trip to mainnet.
-    const qAmt = hasAmt ? amount : "1";
-    setQuoteLoading(true);
-    const t = window.setTimeout(
-      () => {
-        api(`/api/swap?from=${fromAsset}&to=${toAsset}&amount=${encodeURIComponent(qAmt)}&slippage=${slippage}`)
-          .then((d) => {
-            if (!live) return;
-            setQuote({ expectedOut: d.expectedOut, minOut: d.minOut, rate: Number(d.rate), poolId: d.poolId, slippage: d.slippage });
-            setIntents(d.intents ? { expectedOut: d.intents.expectedOut, minOut: d.intents.minOut, rate: Number(d.intents.rate) } : null);
-            setQuoteErr("");
-          })
-          .catch((e) => {
-            if (live) setQuoteErr(e.message || "could not fetch a quote");
-          })
-          .finally(() => {
-            if (live) setQuoteLoading(false);
-          });
-      },
-      hasAmt ? 350 : 0
-    );
-    return () => {
-      live = false;
-      window.clearTimeout(t);
-    };
-  }, [fromAsset, toAsset, amount, slippage, hasAmt]);
-
-  async function swap() {
+  async function create() {
+    setErr("");
     setBusy(true);
-    setResult(null);
     try {
-      const d = await api("/api/swap", {
+      if (!client.trim()) throw new Error("client name is required");
+      if (!Number.isFinite(amtNum) || amtNum <= 0) throw new Error("amount must be above zero");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error("due date is required");
+      const r = await fetch("/api/invoices", {
         method: "POST",
-        body: JSON.stringify({ from: fromAsset, to: toAsset, amount, slippage }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          client_name: client.trim(),
+          client_email: email.trim() || null,
+          note: note.trim() || null,
+          amount: amtNum.toFixed(2),
+          due_date: dueDate,
+          asset,
+        }),
       });
-      const tx = Array.isArray(d.txHashes) && d.txHashes[0] ? ` · tx ${shortAddr(String(d.txHashes[0]))}` : "";
-      setResult({ ok: true, msg: `submitted on NEAR mainnet · expected ${d.expectedOut} ${toAsset}${tx}` });
-      setTimeout(onDone, 1100);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "could not create the invoice");
+      setCreated(d.invoice);
+      await reload();
+      notify("ok", "invoice created");
     } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : "swap failed" });
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }
 
-  const ctaLabel = busy ? "Swapping on mainnet" : hasAmt ? `Swap ${amount} ${fromAsset}` : "Get started";
+  async function copyLink(slug: string) {
+    const link = `${window.location.origin}/i/${slug}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      notify("ok", "pay link copied");
+    } catch {
+      notify("err", "copy failed");
+    }
+  }
+  async function refreshOne(id: string) {
+    try {
+      const r = await fetch(`/api/invoices/${id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "refresh" }),
+      });
+      if (r.ok) {
+        await reload();
+        notify("ok", "invoice refreshed");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  async function voidOne(id: string) {
+    try {
+      const r = await fetch(`/api/invoices/${id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "void" }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        await reload();
+        notify("ok", "invoice voided");
+      } else {
+        notify("err", d.error || "could not void");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  async function refundOne(id: string) {
+    if (!confirm("Return the full invoice amount to the payer on chain and reopen the invoice?")) return;
+    setRefundBusy(id);
+    try {
+      const r = await fetch(`/api/invoices/${id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "refund" }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        await reload();
+        notify("ok", "refund sent on chain, invoice reopened");
+      } else {
+        notify("err", d.error || "refund failed");
+      }
+    } catch {
+      notify("err", "refund failed");
+    } finally {
+      setRefundBusy(null);
+    }
+  }
 
-  return (
-    <Modal title="Swap assets" onClose={onClose}>
-      <p className="mb-5 text-sm text-[var(--color-muted)]">
-        Swap between NEAR and USDC.e on NEAR mainnet. Live rate from the Ref Finance pool, executed from your private vault.
-      </p>
-
-      {/* SELL box */}
-      <div className="card-2 p-3.5">
-        <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-          <span>You sell</span>
-          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {usdValue(fromAsset, hasAmt ? amtNum : 0) || "…"}</span>
+  // created state: show the pay link
+  if (created) {
+    const link = `${window.location.origin}/i/${created.slug}`;
+    return (
+      <Modal title="Invoice ready to send" onClose={onClose}>
+        <div className="card-2 px-4 py-3 text-sm">
+          <div className="font-semibold">{created.client_name}</div>
+          <div className="mono text-xs text-[var(--muted)]">
+            ${Number(created.amount).toFixed(2)} · {created.asset} · due {created.due_date}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <input
-            className="mono min-w-0 flex-1 border-0 bg-transparent p-0 text-3xl font-bold outline-none focus:ring-0"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-            aria-label="Amount to sell"
-          />
-          <button
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-3 py-1.5 text-sm font-bold transition hover:border-[var(--color-accent)]"
-            onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
-            title="Change sell token"
-          >
-            <TokenIcon asset={fromAsset} size={20} />
-            <span>{fromAsset}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
+        <p className="mt-4 text-sm text-[var(--muted)]">
+          Send this link to your client. They pay in {created.asset === "NEAR" ? "NEAR" : "USDC on NEAR"} straight from their wallet and it lands in your NEAR vault.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <input className="input mono flex-1" readOnly value={link} onFocus={(e) => e.target.select()} />
+          <button className="btn btn-ghost" onClick={() => copyLink(created.slug)}>
+            Copy
           </button>
         </div>
-      </div>
-
-      {/* direction flip */}
-      <div className="relative z-10 -my-3 grid place-items-center">
         <button
-          className="icon-btn border border-[var(--color-rule)] bg-[var(--color-bg-2)]"
-          title="Flip direction"
-          aria-label="Flip direction"
-          onClick={() => setFromAsset(fromAsset === "NEAR" ? "USDC" : "NEAR")}
+          className="btn btn-primary mt-6 w-full"
+          onClick={() => {
+            setCreated(null);
+            setClient("");
+            setEmail("");
+            setAmount("");
+            setAsset("USDC");
+            setDueDate("");
+            setNote("");
+            setTab("list");
+          }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 3v18M8 15l-4 4 4 4M16 9l4-4-4-4" />
-          </svg>
+          Create another
+        </button>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Invoices" onClose={onClose} wide>
+      <div className="seg mb-5 w-full">
+        <button className={`${tab === "list" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setTab("list")}>
+          Your invoices
+        </button>
+        <button className={`${tab === "new" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setTab("new")}>
+          New invoice
         </button>
       </div>
 
-      {/* BUY box */}
-      <div className="card-2 p-3.5">
-        <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-          <span>You receive</span>
-          <span className="text-[var(--color-muted)] normal-case tracking-normal">≈ {hasAmt && (quoteLoading && previewOut ? usdValue(toAsset, previewOut) || "…" : quote ? usdValue(toAsset, Number(quote.expectedOut)) || "…" : "…")}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="mono min-w-0 flex-1 truncate text-3xl font-bold text-[var(--color-faint)]">
-            {hasAmt && quoteLoading && previewOut ? (
-              <span className="opacity-70">{fmtPreview(previewOut)}<span className="text-[11px] font-medium"> …</span></span>
-            ) : quoteLoading ? "…" : hasAmt && quote ? quote.expectedOut : "0.00"}
+      {tab === "list" ? (
+        invoices.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="text-sm text-[var(--muted)]">No invoices yet.</p>
+            <button className="btn btn-primary mt-4" onClick={() => setTab("new")}>
+              Create your first invoice
+            </button>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-rule)] px-3 py-1.5 text-sm font-bold">
-            <TokenIcon asset={toAsset} size={20} />
-            <span>{toAsset}</span>
-            <span
-              title="USDC.e is the bridged version of Circle's USDC that runs natively on NEAR (nep141 token). It is the only USDC form in the NEAR swap pools and the one NearHr pays salaries in. 1 USDC.e stays redeemable for 1 USDC."
-              className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-[var(--color-rule)] text-[9px] font-bold text-[var(--color-faint)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            >
-              ?
-            </span>
+        ) : (
+          <>
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-[var(--color-faint)]">
+              {invoices.length} invoice{invoices.length === 1 ? "" : "s"}
+            </div>
+            <a className="text-xs text-[var(--color-accent)] hover:underline" href="/api/invoices/csv">
+              Export all CSV
+            </a>
           </div>
-        </div>
-        {quoteErr && <div className="mt-2 text-xs text-[var(--color-danger)]">{quoteErr}</div>}
-      </div>
+          <div className="mt-2 max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+            {invoices.map((inv) => {
+              const st = INV_STATUS[inv.status] ?? INV_STATUS.open;
+              return (
+                <div key={inv.id} className="card-2 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{inv.client_name}</div>
+                      <div className="mono text-xs text-[var(--muted)]">
+                        ${Number(inv.amount).toFixed(2)} · {inv.asset} · due {inv.due_date}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${st.cls}`}>{st.label}</span>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    <button className="btn btn-ghost !px-2.5 !py-1 text-xs" onClick={() => copyLink(inv.slug)}>
+                      Copy pay link
+                    </button>
+                    <button className="btn btn-ghost !px-2.5 !py-1 text-xs" onClick={() => refreshOne(inv.id)}>
+                      Refresh
+                    </button>
+                    {(inv.status === "open" || inv.status === "pending") && (
+                      <button className="btn btn-ghost !px-2.5 !py-1 text-xs" onClick={() => voidOne(inv.id)}>
+                        Void
+                      </button>
+                    )}
+                    {inv.status === "paid" && (
+                      <button
+                        className="btn btn-ghost !px-2.5 !py-1 text-xs"
+                        disabled={refundBusy === inv.id}
+                        style={refundBusy === inv.id ? { opacity: 0.6 } : undefined}
+                        onClick={() => refundOne(inv.id)}
+                      >
+                        {refundBusy === inv.id ? "Refunding on chain…" : "Refund"}
+                      </button>
+                    )}
+                    <a className="ml-auto btn btn-ghost !px-2.5 !py-1 text-xs" href={`/i/${inv.slug}`} target="_blank" rel="noreferrer">
+                      Open
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          </>
+        )
+      ) : (
+        <div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Client name">
+              <input className="input" placeholder="Acme Studio" value={client} onChange={(e) => setClient(e.target.value)} />
+            </Field>
+            <Field label="Client email (optional)">
+              <input className="input" placeholder="billing@acme.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Amount (USD)">
+              <input className="input mono" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </Field>
+            <Field label="Due date">
+              <input className="input mono" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </Field>
+          </div>
 
-      {/* slippage + rate */}
-      <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--color-rule)] px-4 py-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-[var(--color-muted)]">Slippage</span>
-          <div className="seg">
-            {[0.1, 0.5, 1].map((s) => (
-              <button key={s} className={slippage === s ? "active" : ""} onClick={() => setSlippage(s)}>
-                {s}%
-              </button>
-            ))}
+          <div className="mt-4">
+            <Field label="Client pays in">
+              <div className="seg w-full">
+                <button className={`${asset === "USDC" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setAsset("USDC")}>
+                  USDC on NEAR
+                </button>
+                <button className={`${asset === "NEAR" ? "active" : ""}`} style={{ flex: 1 }} onClick={() => setAsset("NEAR")}>
+                  NEAR
+                </button>
+              </div>
+            </Field>
           </div>
-        </div>
-        <span className="mono text-[var(--color-faint)]">
-          {quote ? `1 ${fromAsset} = ${quote.rate.toFixed(4)} ${toAsset} · pool #${quote.poolId}` : "live rate"}
-        </span>
-      </div>
 
-      {hasAmt && quote && !quoteLoading && (
-        <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
-          <div className="card-2 px-4 py-2.5">
-            <div className="text-[var(--color-faint)]">Expected</div>
-            <div className="mono font-semibold">{quote.expectedOut} {toAsset}</div>
+          <div className="mt-4">
+            <Field label="Note (optional)">
+              <input className="input" placeholder="what you are billing for" value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
           </div>
-          <div className="card-2 px-4 py-2.5">
-            <div className="text-[var(--color-faint)]">Minimum (after slippage)</div>
-            <div className="mono font-semibold">{quote.minOut} {toAsset}</div>
+
+          <div className="card-2 mt-4 px-4 py-2.5 text-xs text-[var(--muted)]">
+            Your client pays {asset === "NEAR" ? "NEAR" : "USDC"} straight from their wallet into your NEAR vault. The payment is confirmed on chain before the invoice is marked paid.
           </div>
+
+          {err && <div className="mt-3 text-sm text-[var(--color-danger)]">{err}</div>}
+
+          <button className="btn btn-primary mt-6 w-full" disabled={busy} onClick={create}>
+            {busy ? "Creating…" : "Create invoice"}
+          </button>
         </div>
       )}
-
-      {intents && (
-        <div className="mt-2 flex items-center justify-between rounded-xl border border-[var(--color-rule)] px-4 py-2.5 text-xs">
-          <span className="font-semibold text-[var(--color-accent)]">Near Intents route</span>
-          <span className="mono text-[var(--color-muted)]">{intents.expectedOut} {toAsset}</span>
-        </div>
-      )}
-
-      {result && (
-        <div
-          className={`mb-1 mt-4 px-4 py-3 text-sm ${
-            result.ok
-              ? "border border-[rgba(34,197,94,0.4)] bg-[rgba(34,197,94,0.1)] text-[#4ade80]"
-              : "border border-[var(--color-danger)] bg-[rgba(239,68,68,0.08)] text-[var(--color-danger)]"
-          }`}
-        >
-          {result.msg}
-        </div>
-      )}
-
-      <button
-        className="btn btn-primary mt-4 w-full"
-        disabled={busy || !quote}
-        onClick={swap}
-        title={!quote ? "Enter an amount to get a live quote" : undefined}
-      >
-        {ctaLabel}
-      </button>
     </Modal>
   );
 }
 
-/* ── send modal ─────────────────────────────────────────────────────── */
 function SendModal({
   employees,
   onClose,
@@ -1890,7 +1878,7 @@ function SendModal({
 }: {
   employees: Employee[];
   onClose: () => void;
-  onSend: (i: { to: string; asset: string; amount: string; note?: string; privacy?: string; employeeId?: string | null }) => Promise<boolean>;
+  onSend: (i: { to: string; asset: string; amount: string; note?: string; employeeId?: string | null }) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<"employee" | "custom">("employee");
   const [empId, setEmpId] = useState("");
@@ -1898,7 +1886,6 @@ function SendModal({
   const [asset, setAsset] = useState("NEAR");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [privacy, setPrivacy] = useState<"transparent" | "shielded" | "compliant">("transparent");
   const [busy, setBusy] = useState(false);
 
   const emp = employees.find((e) => e.id === empId);
@@ -1907,17 +1894,10 @@ function SendModal({
   async function submit() {
     if (!dest || !amount) return;
     setBusy(true);
-    const ok = await onSend({ to: dest, asset, amount, note: note || undefined, privacy, employeeId: mode === "employee" ? empId : null });
+    const ok = await onSend({ to: dest, asset, amount, note: note || undefined, employeeId: mode === "employee" ? empId : null });
     setBusy(false);
     if (ok) onClose();
   }
-
-  const privacyNote =
-    privacy === "transparent"
-      ? "straight to the wallet, visible on the NEAR explorer"
-      : privacy === "shielded"
-        ? "funds a one time stealth wallet the recipient claims privately"
-        : "stealth payout with an audit viewing key for records";
 
   return (
     <Modal title="Send crypto" onClose={onClose}>
@@ -1968,47 +1948,6 @@ function SendModal({
           Salary on file: <span className="mono font-semibold text-[var(--foreground)]">{emp.salary} {emp.asset}</span> · {emp.department || "general"}
         </div>
       )}
-
-      <div className="mt-4">
-        <div className="label mb-2">Privacy layer</div>
-        <div className="grid gap-2">
-          {(
-            [
-              ["transparent", "Transparent", "straight to the wallet, visible on the NEAR explorer"],
-              ["shielded", "Shielded", "funds a one time stealth wallet the recipient claims privately"],
-              ["compliant", "Compliant", "stealth payout with an audit viewing key for records"],
-            ] as const
-          ).map(([val, label, desc]) => (
-            <button
-              key={val}
-              onClick={() => setPrivacy(val)}
-              className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
-                privacy === val
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-                  : "border-[var(--color-rule)] hover:border-[var(--color-accent)]"
-              }`}
-            >
-              <span
-                className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
-                  privacy === val ? "border-[var(--color-accent)]" : "border-[var(--color-faint)]"
-                }`}
-              >
-                {privacy === val && <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold">{label}</span>
-                <span className="block text-xs text-[var(--color-muted)]">{desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 text-xs text-[var(--color-faint)]">{privacyNote}</div>
-        {(privacy === "shielded" || privacy === "compliant") && (
-          <div className="mt-2 rounded-lg border border-[var(--color-warn)] bg-[rgba(154,106,14,0.06)] px-3 py-2 text-xs text-[var(--color-warn)]">
-            Stealth sends need a registered NearHr recipient who can claim the payout{asset === "USDC" ? ", and USDC must land on a registered account" : ""}.
-          </div>
-        )}
-      </div>
 
       <div className="mt-4">
         <Field label="Note (optional)">
@@ -2076,7 +2015,6 @@ function EmployeeModal({
     frequency: employee?.frequency ?? "monthly",
     payDay: employee?.payDay ?? 28,
     status: employee?.status ?? "active",
-    privacy: employee?.privacy ?? "transparent",
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
@@ -2115,7 +2053,6 @@ function EmployeeModal({
       frequency: f.frequency as Employee["frequency"],
       payDay: Number(f.payDay) || null,
       status: f.status as Employee["status"],
-      privacy: f.privacy as Employee["privacy"],
     });
     setBusy(false);
     if (ok) onClose();
@@ -2200,13 +2137,6 @@ function EmployeeModal({
           <select className="input" value={f.status} onChange={(e) => set("status", e.target.value)}>
             <option value="active">active</option>
             <option value="offboarded">offboarded</option>
-          </select>
-        </Field>
-        <Field label="Privacy level">
-          <select className="input" value={f.privacy} onChange={(e) => set("privacy", e.target.value)}>
-            <option value="transparent">transparent · pays to a visible wallet</option>
-            <option value="shielded">shielded · one time stealth address</option>
-            <option value="compliant">compliant · stealth plus audit trail</option>
           </select>
         </Field>
       </div>
@@ -2337,351 +2267,61 @@ function PayrollModal({
   );
 }
 
-type AuditCheck = { name: string; pass: boolean | null; detail?: string };
-type AuditResult = {
-  demo: boolean;
-  demoProvider: string | null;
-  demoModel: string | null;
-  verified: boolean;
-  allPass: boolean;
-  signatureVerified: boolean;
-  model: string;
-  attestedModel: string;
-  nonce: string;
-  chatId: string;
-  checks: AuditCheck[];
-  attestation: {
-    modelAddress: string | null;
-    gatewayAddress: string | null;
-    nodeCount: number;
-    intelQuotePresent: boolean;
-    gpuSummary: string[];
-  };
-  signature: { kind: string | null; recovered: string | null };
-  requestHash: string;
-  responseHash: string;
-  report: any;
-  rawReply: string | null;
-};
-
-function AuditModal({ onClose }: { onClose: () => void }) {
-  const [text, setText] = useState("");
-  const [model, setModel] = useState("deepseek-ai/DeepSeek-V4.1-Flash-1017");
-  const [models, setModels] = useState<string[]>([]);
+function StatementModal({ onClose }: { onClose: () => void }) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<AuditResult | null>(null);
-  const [demo, setDemo] = useState(false);
-  const [demoModel, setDemoModel] = useState<string | null>(null);
-  const [demoProvider, setDemoProvider] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState("");
 
-  useEffect(() => {
-    api("/api/audit")
-      .then((d) => {
-        d.models?.length && setModels(d.models);
-        setDemo(Boolean(d.demo));
-        setDemoModel(d.demoModel ?? null);
-        setDemoProvider(d.demoProvider ?? null);
-      })
-      .catch(() => {});
-  }, []);
-
-  const loadSample = (kind: "statement" | "receipts") => {
-    fetch(`/samples/sample-${kind}.txt`)
-      .then((r) => r.text())
-      .then((t) => {
-        setText(t);
-        setError("");
-        setResult(null);
-      })
-      .catch(() => setError("Could not load the sample."));
-  };
-
-  const onFile = (f: File | undefined) => {
-    if (!f) return;
-    if (f.size > 400 * 1024) {
-      setError("Please keep files under 400 KB (a few pages).");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setText(String(reader.result ?? ""));
-      setError("");
-      setResult(null);
-    };
-    reader.onerror = () => setError("Could not read that file. Try a .txt, .csv or .md file.");
-    reader.readAsText(f);
-  };
-
-  const audit = useCallback(async () => {
+  async function download() {
+    setErr("");
     setBusy(true);
-    setError("");
-    setResult(null);
     try {
-      const d = await api("/api/audit", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, model }),
-      });
-      if (d.error) setError(d.error);
-      else setResult(d);
-    } catch (e: any) {
-      setError(e.message ?? "Network error.");
+      if (!/^\d{4}-\d{2}$/.test(from)) throw new Error("pick the start month first");
+      if (!/^\d{4}-\d{2}$/.test(to)) throw new Error("pick the end month first");
+      if (from > to) throw new Error("the start month must not be after the end month");
+      const span =
+        (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + (Number(to.slice(5)) - Number(from.slice(5)));
+      if (span > 23) throw new Error("pick a range of at most 24 months");
+      const r = await fetch(`/api/statement?from=${from}&to=${to}`);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || "could not build the statement");
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `nearhr-statement-${from}-to-${to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-  }, [text, model]);
-
-  const money = (n: any) =>
-    typeof n === "number"
-      ? (n < 0 ? "" : "+") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : "";
-  const items: any[] = result?.report?.items ?? [];
-  const anomalies: string[] = result?.report?.anomalies ?? [];
-  const totals = result?.report?.totals ?? {};
-  const summary: string = result?.report?.summary ?? "";
+  }
 
   return (
-    <Modal title="Audit spending" onClose={onClose} wide>
-      <p className="mb-4 text-sm leading-relaxed text-[var(--color-muted)]">
-        Paste a bank statement or upload receipts. A model running inside a trusted execution environment on NEAR AI
-        Cloud categorizes every charge and flags what looks unusual. Before a result shows, the app fetches a fresh
-        attestation and checks the signature on the answer. Your document is never stored.
+    <Modal title="Payroll statement" onClose={onClose}>
+      <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
+        A signed PDF of everything money moved in a range, the payroll runs you paid and the invoices your clients
+        settled, each with its NEAR transaction. Send it to a client, an accountant, or an auditor.
       </p>
-
-      {demo && (
-        <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.5)] bg-[rgba(245,158,11,0.08)] px-4 py-3 text-xs leading-relaxed text-[var(--color-warn)]">
-          <b>Demo mode.</b> The answer is currently served by {demoProvider} ({demoModel}) because no NEAR credits are
-          configured yet. The TEE attestation pipeline still runs live and is shown below, but this answer is <b>not
-          verified</b>. This mode is removed before submission. The demo model is a reasoning model, so expect about
-          two minutes per audit.
-        </div>
-      )}
-
-      {/* step 1, the document */}
-      <div className="card-2 p-4">
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-          1, your document
-        </div>
-        <textarea
-          className="input h-44 w-full resize-y font-mono text-xs leading-relaxed"
-          placeholder="Paste a bank statement, or drop a receipts text file below..."
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setError("");
-          }}
-        />
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".txt,.csv,.md,.log,text/plain"
-            className="hidden"
-            onChange={(e) => onFile(e.target.files?.[0])}
-          />
-          <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
-            Upload a file
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => loadSample("statement")}>
-            Load sample statement
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => loadSample("receipts")}>
-            Load sample receipts
-          </button>
-          <select className="input ml-auto max-w-[220px] text-xs" value={model} onChange={(e) => setModel(e.target.value)}>
-            {models.length > 0 && !models.includes(model) && <option value={model}>{model}</option>}
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className="btn btn-primary mt-4 w-full" disabled={busy || !text.trim()} onClick={audit}>
-          {busy ? "Verifying the TEE and auditing..." : "Audit inside the TEE"}
-        </button>
-        <p className="mt-3 text-xs leading-relaxed text-[var(--color-faint)]">
-          <b className="text-[var(--color-muted)]">Stateless by design.</b> Your text goes straight from this browser to
-          the NEAR AI Cloud endpoint as a request body. It is held in memory for the duration of the request only, and
-          the server writes nothing to disk. No database, no uploads folder, no logs of your document.
-        </p>
-        {error && <p className="mt-3 text-xs leading-relaxed text-[var(--color-danger)]">{error}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="From month">
+          <input className="input mono" type="month" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </Field>
+        <Field label="To month">
+          <input className="input mono" type="month" value={to} onChange={(e) => setTo(e.target.value)} />
+        </Field>
       </div>
-
-      {/* step 2, the proof */}
-      <div
-        className={`mt-4 rounded-2xl border p-4 ${
-          result ? (result.verified ? "border-[rgba(34,197,94,0.4)]" : "border-[rgba(239,68,68,0.45)]") : "border-[var(--color-rule)]"
-        } bg-[var(--color-bg-2)]`}
-      >
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-          2, the proof
-        </div>
-        {!result && (
-          <p className="text-xs leading-relaxed text-[var(--color-muted)]">
-            After the audit finishes, this panel lists every check that ran: the fresh nonce we minted, the TEE node
-            addresses, the NVIDIA GPU secure boot and debug state, the Intel TDX quote, and the signature that binds our
-            exact request and response to the attested key.
-          </p>
-        )}
-        {result && (
-          <>
-            <div className="mb-3 flex items-center gap-3">
-              <div
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border text-base ${
-                  result.verified
-                    ? "border-[var(--color-green)] bg-[rgba(34,197,94,0.15)] text-[var(--color-green)]"
-                    : "border-[var(--color-danger)] bg-[rgba(239,68,68,0.12)] text-[var(--color-danger)]"
-                }`}
-              >
-                {result.verified ? "✓" : "✕"}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-bold">
-                  {result.demo ? "Demo run " : "Analysis run "}
-                  <span className={result.verified ? "text-[var(--color-green)]" : "text-[var(--color-danger)]"}>
-                    {result.demo ? "Not verified (demo)" : result.verified ? "Verified" : "Not verified"}
-                  </span>
-                </div>
-                <div className="text-xs text-[var(--color-muted)]">
-                  {result.verified
-                    ? "Every check passed. The answer came from the attested trusted execution environment."
-                    : result.demo
-                      ? "The answer came from an external provider, not the TEE. The attestation proves the TEE fleet is healthy but does not cover this answer."
-                      : "One or more checks failed. Do not trust this result."}
-                </div>
-              </div>
-            </div>
-            <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
-              {result.checks.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 border-b border-[var(--color-rule)] pb-1.5 text-xs last:border-0"
-                >
-                  <span
-                    className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] ${
-                      c.pass === null
-                        ? "border-[var(--color-rule)] text-[var(--color-faint)]"
-                        : c.pass
-                          ? "border-[rgba(34,197,94,0.5)] bg-[rgba(34,197,94,0.15)] text-[var(--color-green)]"
-                          : "border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.12)] text-[var(--color-danger)]"
-                    }`}
-                  >
-                    {c.pass === null ? "…" : c.pass ? "✓" : "✕"}
-                  </span>
-                  <div className="min-w-0">
-                    {c.name}
-                    {c.detail && (
-                      <div className="break-all font-mono text-[11px] text-[var(--color-faint)]">{c.detail}</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 break-all font-mono text-[11px] leading-relaxed text-[var(--color-faint)]">
-              <div><b className="text-[var(--color-muted)]">model:</b> {result.model}</div>
-              <div><b className="text-[var(--color-muted)]">nonce:</b> {result.nonce}</div>
-              <div><b className="text-[var(--color-muted)]">chat id:</b> {result.chatId}</div>
-              <div><b className="text-[var(--color-muted)]">model TEE address:</b> {result.attestation.modelAddress}</div>
-              {result.attestation.gatewayAddress && (
-                <div><b className="text-[var(--color-muted)]">gateway address:</b> {result.attestation.gatewayAddress}</div>
-              )}
-              {result.signature.recovered && (
-                <div><b className="text-[var(--color-muted)]">recovered signer:</b> {result.signature.recovered}</div>
-              )}
-              <div><b className="text-[var(--color-muted)]">request sha256:</b> {result.requestHash}</div>
-              <div><b className="text-[var(--color-muted)]">response sha256:</b> {result.responseHash}</div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* step 3, the audit */}
-      {result?.report && (
-        <div className="mt-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-bg-2)] p-4">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-            3, the audit
-          </div>
-          <div className="mb-3.5 grid grid-cols-2 gap-3">
-            <div className="card-2 p-3">
-              <div className="text-[11px] uppercase tracking-wider text-[var(--color-faint)]">Money in</div>
-              <div className="mono mt-1 text-xl font-bold text-[var(--color-green)]">{money(totals.income)}</div>
-            </div>
-            <div className="card-2 p-3">
-              <div className="text-[11px] uppercase tracking-wider text-[var(--color-faint)]">Money out</div>
-              <div className="mono mt-1 text-xl font-bold">{money(totals.spend)}</div>
-            </div>
-          </div>
-          {items.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--color-rule)] text-left text-[11px] uppercase tracking-wider text-[var(--color-faint)]">
-                    <th className="px-2 py-1.5 font-medium">Date</th>
-                    <th className="px-2 py-1.5 font-medium">Description</th>
-                    <th className="px-2 py-1.5 font-medium">Category</th>
-                    <th className="px-2 py-1.5 font-medium">Amount</th>
-                    <th className="px-2 py-1.5 font-medium">Flag</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, i) => (
-                    <tr key={i} className={it.flag ? "bg-[rgba(245,158,11,0.06)]" : ""}>
-                      <td className="mono whitespace-nowrap px-2 py-1.5 text-[var(--color-faint)]">{it.date || "n/a"}</td>
-                      <td className="px-2 py-1.5">{it.desc}</td>
-                      <td className="px-2 py-1.5">
-                        <span className="inline-block rounded-full border border-[var(--color-rule)] bg-[var(--color-bg-2)] px-2 py-0.5 text-[11px]">
-                          {it.category}
-                        </span>
-                      </td>
-                      <td className={`mono whitespace-nowrap px-2 py-1.5 ${Number(it.amount) > 0 ? "text-[var(--color-green)]" : ""}`}>
-                        {money(it.amount)}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {it.flag && (
-                          <span className="inline-block rounded-full border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-warn)]">
-                            {String(it.flag).replace(/_/g, " ")}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {anomalies.length > 0 && (
-            <ul className="mt-3.5 space-y-1.5">
-              {anomalies.map((a, i) => (
-                <li
-                  key={i}
-                  className="rounded-r-lg border-l-2 border-[var(--color-warn)] bg-[var(--color-bg-2)] px-2.5 py-2 text-xs leading-relaxed"
-                >
-                  {a}
-                </li>
-              ))}
-            </ul>
-          )}
-          {summary && <p className="mt-3.5 text-[13px] leading-relaxed text-[var(--color-muted)]">{summary}</p>}
-        </div>
-      )}
-      {result && !result.report && result.rawReply && (
-        <div className="mt-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-bg-2)] p-4">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
-            Raw model reply (could not parse into a table)
-          </div>
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-[var(--color-muted)]">{result.rawReply}</p>
-        </div>
-      )}
-
-      <p className="mt-4 text-[11px] leading-relaxed text-[var(--color-faint)]">
-        <b className="text-[var(--color-muted)]">Nothing is stored.</b> This route has no database and no file writes. The
-        document text exists only inside a single HTTPS request to NEAR AI Cloud and in the memory of this process until
-        the response is sent. The same promise lives in the source comments of <span className="mono">src/app/api/audit/route.ts</span>. All
-        sample documents are fictional.
-      </p>
+      {err && <div className="mt-3 text-sm text-[var(--color-danger)]">{err}</div>}
+      <button className="btn btn-primary mt-5 w-full" disabled={busy} onClick={download}>
+        {busy ? "Building the PDF…" : "Download PDF statement"}
+      </button>
     </Modal>
   );
 }

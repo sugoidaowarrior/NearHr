@@ -54,7 +54,6 @@ export function initDb(): void {
       name            TEXT NOT NULL,
       asset           TEXT NOT NULL,             -- NEAR | USDC
       usdc_contract   TEXT,                      -- nep141 address when asset=USDC
-      privacy         TEXT NOT NULL DEFAULT 'transparent', -- transparent|shielded|compliant
       status          TEXT NOT NULL DEFAULT 'draft',  -- draft|confirmed|executing|done|failed
       total_yocto     TEXT NOT NULL DEFAULT '0',      -- decimal string; > 2^63 overflows INTEGER
       employee_count  INTEGER NOT NULL DEFAULT 0,
@@ -70,9 +69,7 @@ export function initDb(): void {
       recipient_email TEXT NOT NULL,
       recipient_name  TEXT,
       amount_yocto    TEXT NOT NULL DEFAULT '0',      -- decimal string (yocto/base units)
-      privacy         TEXT NOT NULL,             -- per-item override or inherited
-      stealth_addr    TEXT,                      -- sip:near:... encoded meta address
-      near_account    TEXT,                      -- employee NEAR account (transparent mode)
+      near_account    TEXT,                      -- employee NEAR account to pay
       status          TEXT NOT NULL DEFAULT 'pending', -- pending|executed|failed
       tx_ref          TEXT,                      -- 1Click intent id / near tx hash
       error           TEXT,
@@ -169,16 +166,6 @@ export function initDb(): void {
     }
     db.prepare("PRAGMA user_version = 3").run();
   }
-  if (ver < 4) {
-    // Per employee privacy level (transparent, shielded, compliant) for the
-    // team directory. Defaults to transparent; payroll runs upgrade it when a
-    // shielded or compliant payout is actually made for that person.
-    const empCols = db.prepare("PRAGMA table_info(employees)").all() as { name: string }[];
-    if (!empCols.some((c) => c.name === "privacy")) {
-      db.exec("ALTER TABLE employees ADD COLUMN privacy TEXT NOT NULL DEFAULT 'transparent'");
-    }
-    db.prepare("PRAGMA user_version = 4").run();
-  }
   if (ver < 5) {
     // Optional profile photo per employee (data URL), set when adding a person.
     const empCols = db.prepare("PRAGMA table_info(employees)").all() as { name: string }[];
@@ -196,65 +183,162 @@ export function initDb(): void {
     }
     db.prepare("PRAGMA user_version = 6").run();
   }
-  const itemCols = db.prepare("PRAGMA table_info(payroll_items)").all() as {
-    name: string;
-    type: string;
-  }[];
-  if (!itemCols.some((c) => c.name === "near_account")) {
-    db.exec("ALTER TABLE payroll_items ADD COLUMN near_account TEXT");
-  }
-  if (itemCols.some((c) => c.name === "amount_yocto" && c.type === "INTEGER")) {
+  if (ver < 7) {
+    // Invoicing: open invoices an employer issues to a client, settled on NEAR.
     db.exec(`
-      CREATE TABLE payroll_items_new (
-        id              TEXT PRIMARY KEY,
-        run_id          TEXT NOT NULL REFERENCES payroll_runs(id) ON DELETE CASCADE,
-        recipient_email TEXT NOT NULL,
-        recipient_name  TEXT,
-        amount_yocto    TEXT NOT NULL DEFAULT '0',
-        privacy         TEXT NOT NULL,
-        stealth_addr    TEXT,
-        near_account    TEXT,
-        status          TEXT NOT NULL DEFAULT 'pending',
-        tx_ref          TEXT,
-        error           TEXT,
-        executed_at     TEXT
+      CREATE TABLE IF NOT EXISTS invoices (
+        id TEXT PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        employer_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        client_email TEXT,
+        note TEXT,
+        items_json TEXT NOT NULL DEFAULT '[]',
+        amount TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        quote_ref TEXT,
+        deposit_address TEXT,
+        deposit_deadline TEXT,
+        payer_asset TEXT,
+        payer_amount TEXT,
+        near_tx TEXT,
+        settled_at TEXT,
+        relayer_tx TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      INSERT INTO payroll_items_new SELECT id, run_id, recipient_email, recipient_name,
-        CAST(amount_yocto AS TEXT), privacy, stealth_addr, near_account, status, tx_ref, error, executed_at
-        FROM payroll_items;
-      DROP TABLE payroll_items;
-      ALTER TABLE payroll_items_new RENAME TO payroll_items;
-      CREATE INDEX idx_items_run ON payroll_items(run_id);
+      CREATE INDEX IF NOT EXISTS idx_invoices_employer ON invoices(employer_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_invoices_slug ON invoices(slug);
     `);
+    db.prepare("PRAGMA user_version = 7").run();
   }
-  const runCols = db.prepare("PRAGMA table_info(payroll_runs)").all() as {
-    name: string;
-    type: string;
-  }[];
-  if (runCols.some((c) => c.name === "total_yocto" && c.type === "INTEGER")) {
+
+  if (ver < 8) {
+    // Record the payer's wallet account id when they claim payment, so the
+    // server can re poll the tx RPC by hash later (hash lookups need a sender).
+    db.exec(`ALTER TABLE invoices ADD COLUMN payer_account TEXT`);
+    db.prepare("PRAGMA user_version = 8").run();
+  }
+  if (ver < 9) {
+    // The token the invoice is billed in: "USDC" or "NEAR". The payer pays in
+    // exactly this token; the server verifies the matching on chain credit.
+    db.exec(`ALTER TABLE invoices ADD COLUMN asset TEXT NOT NULL DEFAULT 'USDC'`);
+    db.prepare("PRAGMA user_version = 9").run();
+  }
+  if (ver < 10) {
+    // Walletless payer accounts: a customer without a NEAR wallet signs in with
+    // Google and NearHr provisions a smart account for them (ed25519 key stored
+    // encrypted, implicit NEAR address). Email is only the sign in method; the
+    // account holds no money until the customer funds it.
     db.exec(`
-      CREATE TABLE payroll_runs_new (
-        id              TEXT PRIMARY KEY,
-        employer_id     TEXT NOT NULL REFERENCES users(id),
-        name            TEXT NOT NULL,
-        asset           TEXT NOT NULL,
-        usdc_contract   TEXT,
-        privacy         TEXT NOT NULL DEFAULT 'transparent',
-        status          TEXT NOT NULL DEFAULT 'draft',
-        total_yocto     TEXT NOT NULL DEFAULT '0',
-        employee_count  INTEGER NOT NULL DEFAULT 0,
-        near_ref        TEXT,
-        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-        executed_at     TEXT
+      CREATE TABLE IF NOT EXISTS payer_accounts (
+        user_id      TEXT PRIMARY KEY,
+        near_account TEXT NOT NULL,
+        record       TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      INSERT INTO payroll_runs_new SELECT id, employer_id, name, asset, usdc_contract,
-        privacy, status, CAST(total_yocto AS TEXT), employee_count, near_ref, created_at, executed_at
-        FROM payroll_runs;
-      DROP TABLE payroll_runs;
-      ALTER TABLE payroll_runs_new RENAME TO payroll_runs;
-      CREATE INDEX idx_runs_employer ON payroll_runs(employer_id);
+      CREATE INDEX IF NOT EXISTS idx_payer_accounts_user ON payer_accounts(user_id);
     `);
+    const osCols = db.prepare("PRAGMA table_info(oauth_states)").all() as { name: string }[];
+    if (!osCols.some((c) => c.name === "next_url")) {
+      db.exec("ALTER TABLE oauth_states ADD COLUMN next_url TEXT");
+    }
+    db.prepare("PRAGMA user_version = 10").run();
   }
+  if (ver < 11) {
+    // Refund receipt: the tx that returned a paid invoice's money to the
+    // payer. refund_at is the ISO time of that on chain transfer.
+    const invCols = db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[];
+    if (!invCols.some((c) => c.name === "refund_tx")) {
+      db.exec("ALTER TABLE invoices ADD COLUMN refund_tx TEXT");
+    }
+    if (!invCols.some((c) => c.name === "refund_at")) {
+      db.exec("ALTER TABLE invoices ADD COLUMN refund_at TEXT");
+    }
+    db.prepare("PRAGMA user_version = 11").run();
+  }
+  // Drop legacy columns by rebuilding any table whose live schema still
+  // carries them (idempotent: a clean database matches the whitelist exactly,
+  // so the rebuild is a no-op). The whitelist is the set of column names that
+  // follow a leading whitespace in the CREATE below.
+  const ID = /^([a-z][a-z0-9_]*)\b/;
+  const columnNames = (create: string): string[] => {
+    const out: string[] = [];
+    for (const line of create.split("\n")) {
+      // First token of the line; skip the leading CREATE TABLE line.
+      const m = line.match(ID);
+      if (m && !line.trimStart().startsWith("CREATE")) out.push(m[1]);
+    }
+    return out;
+  };
+  const rebuildTable = (table: string, create: string, select: string, index: string) => {
+    const live = new Set(
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
+    );
+    const keep = columnNames(create);
+    // No rebuild needed when the live table has exactly the kept columns.
+    if (keep.length && live.size === keep.length && keep.every((c) => live.has(c))) return;
+    db.exec(`CREATE TABLE ${table}_new (${create});`);
+    db.exec(`INSERT INTO ${table}_new SELECT ${select} FROM ${table};`);
+    db.exec(`DROP TABLE ${table};`);
+    db.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);
+    db.exec(index);
+  };
+
+  rebuildTable(
+    "payroll_items",
+    `id              TEXT PRIMARY KEY,
+      run_id          TEXT NOT NULL REFERENCES payroll_runs(id) ON DELETE CASCADE,
+      recipient_email TEXT NOT NULL,
+      recipient_name  TEXT,
+      amount_yocto    TEXT NOT NULL DEFAULT '0',
+      near_account    TEXT,
+      status          TEXT NOT NULL DEFAULT 'pending',
+      tx_ref          TEXT,
+      error           TEXT,
+      executed_at     TEXT`,
+    "id, run_id, recipient_email, recipient_name, CAST(amount_yocto AS TEXT), near_account, status, tx_ref, error, executed_at",
+    "CREATE INDEX idx_items_run ON payroll_items(run_id);"
+  );
+
+  rebuildTable(
+    "payroll_runs",
+    `id              TEXT PRIMARY KEY,
+      employer_id     TEXT NOT NULL REFERENCES users(id),
+      name            TEXT NOT NULL,
+      asset           TEXT NOT NULL,
+      usdc_contract   TEXT,
+      status          TEXT NOT NULL DEFAULT 'draft',
+      total_yocto     TEXT NOT NULL DEFAULT '0',
+      employee_count  INTEGER NOT NULL DEFAULT 0,
+      near_ref        TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      executed_at     TEXT`,
+    "id, employer_id, name, asset, usdc_contract, status, CAST(total_yocto AS TEXT), employee_count, near_ref, created_at, executed_at",
+    "CREATE INDEX idx_runs_employer ON payroll_runs(employer_id);"
+  );
+
+  rebuildTable(
+    "employees",
+    `id              TEXT PRIMARY KEY,
+      employer_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      email           TEXT,
+      department      TEXT,
+      job_title       TEXT,
+      wallet          TEXT,
+      asset           TEXT NOT NULL DEFAULT 'NEAR',
+      salary          TEXT NOT NULL DEFAULT '0',
+      frequency       TEXT NOT NULL DEFAULT 'monthly',
+      pay_day         INTEGER,
+      status          TEXT NOT NULL DEFAULT 'active',
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      avatar          TEXT`,
+    "id, employer_id, name, email, department, job_title, wallet, asset, salary, frequency, pay_day, status, created_at, updated_at, avatar",
+    "CREATE INDEX idx_emp_employer ON employees(employer_id);"
+  );
 
   console.log("[db] ready at", DB_PATH);
 }

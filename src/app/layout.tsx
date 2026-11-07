@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NearHr · private payroll on NEAR",
+  title: "NearHr · onchain payroll on NEAR",
   description:
-    "Pay salaries and bonuses in NEAR or USDC with optional privacy in three levels. Sign in with Google and your private wallet is created automatically.",
+    "Pay salaries and bonuses in NEAR or USDC, with a public receipt for every run. Sign in with Google and your wallet is created automatically.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

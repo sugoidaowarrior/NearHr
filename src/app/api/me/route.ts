@@ -13,14 +13,12 @@ export async function GET(req: NextRequest) {
     .prepare("SELECT * FROM users WHERE id = ?")
     .get(userId) as Record<string, unknown>;
   if (!user) return NextResponse.json({ error: "no such user" }, { status: 404 });
-  let vault: { accountId: string; viewingKey: string | null; metaAddress: string | null } | null = null;
+  let vault: { accountId: string } | null = null;
   try {
     const v = unlockVault(userId);
     if (v) {
       vault = {
         accountId: v.nearAccount,
-        viewingKey: v.sipViewingKey ?? null,
-        metaAddress: v.sipMetaAddress ?? null,
       };
     }
   } catch {

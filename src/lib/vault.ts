@@ -13,7 +13,6 @@ import {
   makeBackupBundle,
 } from "./crypto";
 import { newMasterKey, PublicKey } from "./near";
-import { createEmployeeStealth, EmployeeStealth } from "./privacy";
 import { newVaultId } from "./crypto";
 
 export interface VaultView {
@@ -25,8 +24,6 @@ export interface VaultView {
   createdAt: string;
   /** True if the vault was created by the old passphrase flow (can't auto-unlock). */
   legacy?: boolean;
-  /** SIP Protocol viewing key: read only, lets an auditor decrypt stealth payouts. */
-  viewingKey?: string | null;
 }
 
 /**
@@ -57,16 +54,12 @@ export function ensureVault(userId: string): {
 
   const master = newMasterKey();
   const account = implicitAccountId(master.publicKey);
-  const stealth: EmployeeStealth = createEmployeeStealth("payroll");
   // Custodial: encrypted with a server-derived key. The KMS key + this record
   // together are the only way to decrypt; neither the DB alone nor the KMS
   // key alone is sufficient. (Custodial MVP — see README threat model.)
   const record = encryptVault(
     {
       nearMasterKey: master.base58,
-      sipSpendingKey: stealth.spendingPrivateKey,
-      sipViewingKey: stealth.viewingPrivateKey,
-      sipMetaAddress: stealth.metaAddress,
       nearAccount: account,
       createdAt: new Date().toISOString(),
     },
@@ -87,7 +80,7 @@ export function ensureVault(userId: string): {
  * point of this flow. If you later want non-custodial recovery, swap this for
  * a user passphrase (the encrypt/decrypt functions are unchanged).
  */
-function serverKekFor(userId: string): string {
+export function serverKekFor(userId: string): string {
   const appSecret = process.env.VAULT_APP_SECRET || "hushpay-custodial-dev";
   return `${appSecret}:${userId}`;
 }
@@ -103,13 +96,9 @@ export function createVault(userId: string, passphrase: string, nearAccount: str
   backup: ReturnType<typeof makeBackupBundle>;
 } {
   const master = newMasterKey();
-  const stealth: EmployeeStealth = createEmployeeStealth("payroll");
   const record = encryptVault(
     {
       nearMasterKey: master.base58,
-      sipSpendingKey: stealth.spendingPrivateKey,
-      sipViewingKey: stealth.viewingPrivateKey,
-      sipMetaAddress: stealth.metaAddress,
       nearAccount,
       createdAt: new Date().toISOString(),
     },
@@ -152,9 +141,6 @@ export function unlockVault(userId: string, passphrase?: string) {
         nearAccount: plain.nearAccount ?? row.near_account,
       } as {
         nearMasterKey: string;
-        sipSpendingKey: string;
-        sipViewingKey: string;
-        sipMetaAddress: string;
         nearAccount: string;
         createdAt: string;
       };
@@ -209,19 +195,6 @@ export function getVaultView(userId: string): VaultView | null {
     }
     legacyCache.set(userId, legacy);
   }
-  // Reading the viewing key costs one decryption (same cost as the legacy
-  // check above); only attempt it for non legacy vaults.
-  let viewingKey: string | null = null;
-  if (!legacy) {
-    try {
-      const plain = decryptVault(row.record, serverKekFor(userId)) as {
-        sipViewingKey?: string;
-      };
-      viewingKey = plain.sipViewingKey ?? null;
-    } catch {
-      viewingKey = null;
-    }
-  }
   return {
     userId,
     nearAccount: row.near_account,
@@ -230,7 +203,6 @@ export function getVaultView(userId: string): VaultView | null {
     backupSentAt: row.backup_sent_at,
     createdAt: row.created_at,
     legacy,
-    viewingKey,
   };
 }
 

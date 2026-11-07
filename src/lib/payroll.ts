@@ -1,23 +1,14 @@
 /**
  * Payroll engine — CSV parsing, validation, and batch execution.
  *
- * Execution modes per run (set by privacy level):
- *  - transparent: employer's smart account sends NEAR/USDC directly to each
- *    employee's NEAR account. One tx per employee (batched sequentially to
- *    respect per-account nonce ordering).
- *  - shielded / compliant: employer derives a one-time stealth implicit
- *    account per employee and funds it. Employees claim from their device.
- *    (compliant additionally records the viewing key for audit.)
+ * Every run pays transparently: the employer's smart account sends NEAR or
+ * USDC directly to each employee's NEAR account. One tx per employee
+ * (batched sequentially to respect per-account nonce ordering).
  *
  * Max 50 employees per run (product decision).
  */
 import { getDb } from "./db";
 import { newVaultId } from "./crypto";
-import {
-  isPrivacyLevel,
-  PrivacyLevel,
-  derivePayrollDestination,
-} from "./privacy";
 import {
   accountFromVault,
   sendNear,
@@ -29,7 +20,7 @@ import {
   defaultNearConfig,
 } from "./near";
 import { recordPayment, fromBase } from "./payments";
-import { findEmployee, bumpPrivacy } from "./employees";
+import { findEmployee } from "./employees";
 
 export const MAX_EMPLOYEES_PER_RUN = 50;
 
@@ -37,10 +28,7 @@ export interface CsvEmployee {
   email: string;
   name: string;
   amount: string; // human-readable ("1500", "1.5")
-  asset?: string; // NEAR | USDC — defaults to run asset
-  privacy?: PrivacyLevel; // per-row override
-  nearAccount?: string; // required for transparent mode
-  stealthMeta?: string; // required for shielded/compliant mode
+  nearAccount?: string; // employee NEAR account to pay
 }
 
 export interface ParsedCsv {
@@ -50,8 +38,8 @@ export interface ParsedCsv {
 
 /**
  * Minimal CSV parser (no deps): handles quoted fields, commas, CRLF.
- * Expected header (case-insensitive): email,name,amount,near_account,stealth_meta,privacy
- * Unknown columns are ignored; per-row privacy/asset override the run.
+ * Expected header (case-insensitive): email,name,amount,near_account
+ * Unknown columns are ignored.
  */
 export function parsePayrollCsv(text: string): ParsedCsv {
   const rows = parseCsvRows(text);
@@ -64,8 +52,6 @@ export function parsePayrollCsv(text: string): ParsedCsv {
   const iName = idx("name");
   const iAmount = idx("amount");
   const iAccount = idx("near_account");
-  const iStealth = idx("stealth_meta");
-  const iPrivacy = idx("privacy");
 
   if (iEmail < 0 || iAmount < 0) {
     return {
@@ -106,14 +92,6 @@ export function parsePayrollCsv(text: string): ParsedCsv {
       amount,
     };
     if (iAccount >= 0) emp.nearAccount = (row[iAccount] || "").trim();
-    if (iStealth >= 0) emp.stealthMeta = (row[iStealth] || "").trim();
-    if (iPrivacy >= 0) {
-      const p = (row[iPrivacy] || "").trim().toLowerCase();
-      if (p) {
-        if (isPrivacyLevel(p)) emp.privacy = p;
-        else errors.push(`row ${r + 1}: bad privacy level "${p}"`);
-      }
-    }
     employees.push(emp);
   }
 
@@ -160,7 +138,6 @@ export interface CreateRunInput {
   employerId: string;
   name: string;
   asset: "NEAR" | "USDC";
-  privacy: PrivacyLevel;
   usdcContract?: string;
   items: CsvEmployee[];
 }
@@ -174,19 +151,18 @@ export function createRun(input: CreateRunInput): string {
       ? input.items.reduce((s, e) => s + toYocto(e.amount), 0n)
       : 0n; // USDC total tracked in base units via items
   db.prepare(
-    `INSERT INTO payroll_runs (id, employer_id, name, asset, usdc_contract, privacy, status, total_yocto, employee_count)
-     VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)`
-  ).run(runId, input.employerId, input.name, input.asset, input.usdcContract ?? null, input.privacy, totalYocto.toString(), input.items.length);
+    `INSERT INTO payroll_runs (id, employer_id, name, asset, usdc_contract, status, total_yocto, employee_count)
+     VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)`
+  ).run(runId, input.employerId, input.name, input.asset, input.usdcContract ?? null, totalYocto.toString(), input.items.length);
   const ins = db.prepare(
-    `INSERT INTO payroll_items (id, run_id, recipient_email, recipient_name, amount_yocto, privacy, stealth_addr, near_account, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+    `INSERT INTO payroll_items (id, run_id, recipient_email, recipient_name, amount_yocto, near_account, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending')`
   );
   const tx = db.transaction(() => {
     for (const e of input.items) {
-      const privacy = e.privacy ?? input.privacy;
       const amount =
         input.asset === "NEAR" ? toYocto(e.amount) : usdcToBase(e.amount);
-      ins.run(newVaultId(), runId, e.email, e.name, amount.toString(), privacy, e.stealthMeta ?? null, e.nearAccount ?? null);
+      ins.run(newVaultId(), runId, e.email, e.name, amount.toString(), e.nearAccount ?? null);
     }
   });
   tx();
@@ -197,7 +173,6 @@ export interface RunSummary {
   id: string;
   name: string;
   asset: string;
-  privacy: PrivacyLevel;
   status: string;
   employee_count: number;
   total_yocto: string;
@@ -208,7 +183,6 @@ export interface RunSummary {
     email: string;
     name: string;
     amount: string;
-    privacy: PrivacyLevel;
     status: string;
     tx_ref: string | null;
     error: string | null;
@@ -228,14 +202,13 @@ export function getRun(runId: string, employerId?: string): RunSummary | null {
   if (!run) return null;
   const items = db
     .prepare(
-      `SELECT recipient_email, recipient_name, amount_yocto, privacy, status, tx_ref, error FROM payroll_items WHERE run_id = ? ORDER BY rowid`
+      `SELECT recipient_email, recipient_name, amount_yocto, status, tx_ref, error FROM payroll_items WHERE run_id = ? ORDER BY rowid`
     )
     .all(runId) as Record<string, unknown>[];
   return {
     id: String(run.id),
     name: String(run.name),
     asset: String(run.asset),
-    privacy: run.privacy as PrivacyLevel,
     status: String(run.status),
     employee_count: Number(run.employee_count),
     total_yocto: String(run.total_yocto),
@@ -246,7 +219,6 @@ export function getRun(runId: string, employerId?: string): RunSummary | null {
       email: String(i.recipient_email),
       name: String(i.recipient_name ?? ""),
       amount: String(i.amount_yocto),
-      privacy: i.privacy as PrivacyLevel,
       status: String(i.status),
       tx_ref: (i.tx_ref as string | null) ?? null,
       error: (i.error as string | null) ?? null,
@@ -306,8 +278,8 @@ export async function executeRun(
   const asset = String(run.asset);
   const employerId = String(run.employer_id);
   if (asset === "USDC") {
-    // One-time USDC.e storage registration for the vault (0.125 NEAR,
-    // idempotent) so the first ft_transfer in the run cannot fail.
+    // One-time USDC.e storage registration for the vault (live storage
+    // minimum, idempotent) so the first ft_transfer in the run cannot fail.
     await ensureUsdcRegistration(account, cfg);
   }
   const results: ExecuteResult["results"] = [];
@@ -316,38 +288,23 @@ export async function executeRun(
 
   const items = db
     .prepare(
-      `SELECT id, recipient_email, recipient_name, amount_yocto, privacy, stealth_addr, near_account, status FROM payroll_items WHERE run_id = ? AND status = 'pending' ORDER BY rowid`
+      `SELECT id, recipient_email, recipient_name, amount_yocto, near_account, status FROM payroll_items WHERE run_id = ? AND status = 'pending' ORDER BY rowid`
     )
     .all(runId) as Record<string, unknown>[];
 
   for (const item of items) {
     const email = String(item.recipient_email);
-    const privacy = String(item.privacy) as PrivacyLevel;
     const amountStr = String(item.amount_yocto);
-    const stealthMeta = (item.stealth_addr as string | null) ?? null;
     try {
       let txHash = "";
-      let dest = "";
-      if (privacy === "transparent") {
-        // Destination: the NEAR account the employer supplied in the CSV, else
-        // fall back to a registered NearHr user with that email.
-        dest = (item.near_account as string | null) ?? (await resolveTransparentDest(email)) ?? "";
-        if (!dest) throw new Error("no NEAR account for transparent recipient");
-        if (asset === "NEAR") {
-          txHash = (await sendNear(account, dest, BigInt(amountStr))).txHash;
-        } else {
-          txHash = (await sendUsdc(account, dest, BigInt(amountStr), cfg)).txHash;
-        }
+      // Destination: the NEAR account the employer supplied in the CSV, else
+      // fall back to a registered NearHr user with that email.
+      const dest = (item.near_account as string | null) ?? (await resolveTransparentDest(email)) ?? "";
+      if (!dest) throw new Error("no NEAR account for recipient");
+      if (asset === "NEAR") {
+        txHash = (await sendNear(account, dest, BigInt(amountStr))).txHash;
       } else {
-        // shielded / compliant: fund a one-time stealth implicit account
-        if (!stealthMeta) throw new Error("missing stealth meta address");
-        const destSt = derivePayrollDestination(stealthMeta);
-        dest = destSt.implicitAccountId;
-        if (asset === "NEAR") {
-          txHash = (await sendNear(account, dest, BigInt(amountStr))).txHash;
-        } else {
-          txHash = (await sendUsdc(account, dest, BigInt(amountStr), cfg)).txHash;
-        }
+        txHash = (await sendUsdc(account, dest, BigInt(amountStr), cfg)).txHash;
       }
       db.prepare(`UPDATE payroll_items SET status='executed', tx_ref=?, executed_at=datetime('now') WHERE id=?`).run(
         txHash || "ok",
@@ -357,13 +314,7 @@ export async function executeRun(
       // ledger: link the payout to the employee directory (best effort) so
       // "last paid" stays accurate. Never let a ledger hiccup fail the run.
       try {
-        const empId = findEmployee(employerId, {
-          email,
-          wallet: privacy === "transparent" ? dest : undefined,
-        });
-        // keep the team directory privacy label in sync with how this person
-        // was actually paid (stealth payout upgrades the level in place)
-        if (empId) bumpPrivacy(employerId, empId, privacy);
+        const empId = findEmployee(employerId, { email, wallet: dest });
         recordPayment({
           employerId,
           employeeId: empId,
@@ -397,11 +348,8 @@ export async function executeRun(
 }
 
 /**
- * Resolve the destination account for a transparent transfer.
- * Order: (1) a registered NearHr user with that email, (2) the item's
- * stealth meta's underlying account is NOT valid for transparent — so require
- * the employer to have supplied a NEAR account. For MVP we accept the email
- * matching a user's NEAR account, else we require the row to carry one.
+ * Resolve the destination account for a transfer: the NEAR account of a
+ * registered NearHr user with that email, if one exists.
  */
 async function resolveTransparentDest(email: string): Promise<string | null> {
   const db = getDb();
