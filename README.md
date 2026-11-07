@@ -24,13 +24,14 @@ transaction, so you can check it with your own eyes at any time.
 
 ## What a bookkeeper needs to know
 
-A bookkeeper is the person in a company who records the money that comes in
-and goes out, who paid what and when, and that every number ties out. NearHr
-is built for that person, and this section is written for them. When a
-company books with NearHr, their bookkeeper is the one who uses NearHr: they
-pull the CSV, check the status of each invoice, and reconcile the on chain
-transactions into the books. If you are the owner or you are just reading
-along, the same points still hold for you.
+This section is written in plain language on purpose. The rule we followed
+is: if a bookkeeper could not read this and use the app, we have not
+finished. A bookkeeper is the person who records the money that comes in
+and goes out, who paid what and when, and that every number ties out.
+NearHr is not a crypto tool for crypto people. If you can use a
+spreadsheet and check the bank, you can use NearHr. So this section skips
+the jargon, and every point below tells you what the money did and where
+the proof is.
 
 - **The money is real.** It is native NEAR and Circle's USDC on NEAR, one to
   one with the dollar. No token you receive is worth anything else.
