@@ -22,16 +22,12 @@ transaction, so you can check it with your own eyes at any time.
    line items, a short narration and a due date. They open a public pay link
    in any browser and pay straight to your vault.
 
-## What a bookkeeper needs to know
+## The money, explained simply
 
-This section is written in plain language on purpose. The rule we followed
-is: if a bookkeeper could not read this and use the app, we have not
-finished. A bookkeeper is the person who records the money that comes in
-and goes out, who paid what and when, and that every number ties out.
-NearHr is not a crypto tool for crypto people. If you can use a
-spreadsheet and check the bank, you can use NearHr. So this section skips
-the jargon, and every point below tells you what the money did and where
-the proof is.
+This section is written in plain language, the same way a bank statement is
+written. No crypto words, no jargon. If you can read a bank statement and
+use a spreadsheet, you can read this. Every point below tells you what the
+money did, when it happened, and where the proof is.
 
 - **The money is real.** It is native NEAR and Circle's USDC on NEAR, one to
   one with the dollar. No token you receive is worth anything else.
