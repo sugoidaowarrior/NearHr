@@ -94,8 +94,13 @@ and the CSV export, so a payroll run is a statement you can check.
 
 ## What is intentionally not in here
 
-- **No 1Click.** It has no testnet, so the wallet popup does its job for
-  free and the full paid flow can be demonstrated at any time.
+- **One click, without the 1Click API.** The pay button works like one click:
+  the client approves a single transfer and NearHr settles it, with no route
+  picking, no token choosing and no wallet software to set up. NearHr does
+  not call the 1Click API itself because that API has no testnet, and this
+  build proves its full paid invoice flow on testnet. The wallet popup does
+  the same job for free, and a solver based route can be added on top without
+  changing the invoice model.
 - **No cross chain Intents.** Your clients pay in NEAR or USDC that already
   live on NEAR, so a cross chain hop would add complexity and nothing.
 - **No line items.** An invoice is a total plus a narration, like most real

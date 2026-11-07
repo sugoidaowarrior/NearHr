@@ -60,7 +60,9 @@ export interface NearConfig {
 
 export function defaultNearConfig(): NearConfig {
   const env = process.env;
-  const network = (env.NEAR_NETWORK || "mainnet").toLowerCase();
+  // Default to testnet: this build is a demo app. Mainnet is an explicit
+  // choice (NEAR_NETWORK=mainnet in .env.local), never a silent fallback.
+  const network = (env.NEAR_NETWORK || "testnet").toLowerCase();
   return {
     networkId: network,
     nodeUrl:
