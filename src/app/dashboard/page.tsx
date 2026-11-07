@@ -1834,6 +1834,17 @@ function InvoicesModal({
                         {refundBusy === inv.id ? "Refunding on chain…" : "Refund"}
                       </button>
                     )}
+                    {inv.status === "refunded" && inv.refund_tx && (
+                      <a
+                        className="btn btn-ghost !px-2.5 !py-1 text-xs text-[var(--color-accent)]"
+                        href={`https://explorer.testnet.near.org/transactions/${inv.refund_tx}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={inv.refund_tx}
+                      >
+                        Refund receipt ↗
+                      </a>
+                    )}
                     <a className="ml-auto btn btn-ghost !px-2.5 !py-1 text-xs" href={`/i/${inv.slug}`} target="_blank" rel="noreferrer">
                       Open
                     </a>

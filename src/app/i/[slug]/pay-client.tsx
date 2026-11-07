@@ -23,7 +23,9 @@ type Inv = {
   status: string;
   payerAccount: string | null;
   nearTx: string | null;
+  refundTx: string | null;
   explorerUrl: string | null;
+  refundExplorerUrl: string | null;
   createdAt: string;
   vault: string | null;
   usdcContract: string | null;
@@ -430,6 +432,16 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
             went straight back to that wallet. If this was your payment account, the money is in
             it: below you can pay the invoice again or cash the balance out to your own NEAR wallet.
           </p>
+          {inv.refundExplorerUrl && (
+            <a
+              href={inv.refundExplorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: "inline-block", marginTop: 10, fontSize: 12.5, color: "var(--color-accent)", fontWeight: 600 }}
+            >
+              View the refund on the NEAR explorer ↗
+            </a>
+          )}
         </div>
       )}
 

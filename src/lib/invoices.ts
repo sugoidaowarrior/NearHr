@@ -264,6 +264,7 @@ export function publicView(inv: Invoice, withPay = false) {
     settledAt: inv.settled_at,
     createdAt: inv.created_at,
     explorerUrl: inv.near_tx ? explorerUrl(defaultNearConfig().networkId, inv.near_tx) : null,
+    refundExplorerUrl: inv.refund_tx ? explorerUrl(defaultNearConfig().networkId, inv.refund_tx) : null,
   };
   if (withPay) {
     try {
