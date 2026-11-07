@@ -19,12 +19,16 @@ import { implicitAccountId, serverKekFor } from "./vault";
 import {
   accountFromVault,
   balanceOf,
+  defaultNearConfig,
+  explorerUrl,
   newMasterKey,
+  normalizeTxHash,
+  queryTx,
   sendNear,
   sendUsdcToVault,
-  usdcStorageMin,
   toYocto,
   usdcBalanceOf,
+  usdcStorageMin,
 } from "./near";
 import {
   getInvoiceBySlug,
@@ -149,4 +153,82 @@ export async function payInvoiceFromPayerAccount(
   const res = await verifyPayment(slug, "", payer.nearAccount, txHash);
   const balAfter = await payerBalances(payer).catch(() => bal);
   return { confirmed: res.confirmed, detail: res.detail, balance: balAfter };
+}
+
+/**
+ * Cash out: move funds from the payer's NearHr payment account to a NEAR
+ * account of their choice, on chain. This is how a walletless customer gets
+ * money back to a wallet they control (for example after a refund, or the
+ * change they never spent). `amount` is in human units of the asset; omit it
+ * to send the whole balance (minus the gas margin for NEAR). Throws with code
+ * "unfunded" when the account can not cover the fee.
+ */
+export async function cashOutPayerAccount(
+  userId: string,
+  dest: string,
+  asset: "NEAR" | "USDC",
+  amount?: string
+): Promise<{ confirmed: boolean; detail: string; txHash: string; explorerUrl: string; balance: PayerBalance }> {
+  const payer = ensurePayerAccount(userId);
+  const destNorm = dest.trim().toLowerCase();
+  const validDest =
+    /^[a-z0-9._-]{2,64}(\.testnet|\.near)$/i.test(destNorm) ||
+    /^[0-9a-f]{64}$/i.test(destNorm) ||
+    /^[1-9A-HJ-NP-Za-km-z]{32,55}$/.test(destNorm);
+  if (!validDest) throw new Error("paste a valid NEAR account id, like name.testnet or a 64 character address");
+  if (destNorm === payer.nearAccount.toLowerCase()) {
+    throw new Error("that is your own payment account, send to a different NEAR wallet");
+  }
+  const bal = await payerBalances(payer);
+  const account = accountFromVault(payer.nearAccount, payer.masterKeyBase58);
+
+  let txHash: string;
+  if (asset === "NEAR") {
+    const all = bal.nearYocto - NEAR_GAS_MARGIN;
+    const yocto = amount === undefined || amount.trim() === "" ? all : toYocto(amount);
+    if (yocto <= 0n) throw new Error("your payment account has no NEAR left to send");
+    if (yocto > bal.nearYocto) throw new Error("that is more than your payment account holds");
+    if (yocto > all) throw new Error("keep a little NEAR for the fee, or send a smaller amount");
+    ({ txHash } = await sendNear(account, destNorm, yocto));
+  } else {
+    const all = bal.usdcBase;
+    const base = amount === undefined || amount.trim() === "" ? all : parseAmount(amount);
+    if (base <= 0n) throw new Error("your payment account has no USDC left to send");
+    if (base > all) throw new Error("that is more than your payment account holds");
+    // The receiving wallet must be registered on the USDC contract, so the
+    // same transaction registers it (the deposit is refunded on chain if the
+    // wallet already has a record). That registration costs a little NEAR, so
+    // the payment account needs a small NEAR balance alongside the USDC.
+    if (bal.nearYocto < (await usdcStorageMin()) + NEAR_GAS_MARGIN) {
+      const e = new Error("your payment account needs a little NEAR for the fee and the one time registration of your wallet on USDC");
+      (e as Error & { code?: string }).code = "unfunded";
+      throw e;
+    }
+    ({ txHash } = await sendUsdcToVault(account, destNorm, base));
+  }
+
+  // Confirm the transaction actually executed before telling the customer it worked.
+  let detail = "cash out broadcast, the chain is confirming it";
+  try {
+    const hexHash = normalizeTxHash(txHash);
+    const res = (await queryTx(hexHash, payer.nearAccount)) as {
+      final_execution_status?: string;
+      status?: unknown;
+    };
+    const s = res.status;
+    const ok =
+      (s && typeof s === "object" && !Array.isArray(s) && Object.keys(s as object).includes("SuccessValue")) ||
+      res.final_execution_status === "SuccessValue";
+    if (ok) detail = "cash out confirmed on chain";
+  } catch {
+    /* the chain view can lag a beat; the explorer link is the proof */
+  }
+  const balanceAfter = await payerBalances(payer).catch(() => bal);
+  return {
+    confirmed: detail.includes("confirmed"),
+    detail,
+    txHash,
+    explorerUrl: explorerUrl(defaultNearConfig().networkId, txHash),
+    balance: balanceAfter,
+  };
 }

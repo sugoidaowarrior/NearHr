@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, use } from "react";
+import { useCallback, useEffect, useRef, useState, use } from "react";
 import { WalletProvider, useWallet, hashFromInput } from "./wallet";
 
 /**
@@ -61,6 +61,13 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
   const [wlLoading, setWlLoading] = useState(false);
   const [wlBusy, setWlBusy] = useState(false);
   const [wlMsg, setWlMsg] = useState("");
+  const [coOpen, setCoOpen] = useState(false);
+  const [coDest, setCoDest] = useState("");
+  const [coAmount, setCoAmount] = useState("");
+  const [coBusy, setCoBusy] = useState(false);
+  const [coMsg, setCoMsg] = useState("");
+  const [coTx, setCoTx] = useState("");
+  const wlTried = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -147,6 +154,25 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // A returning walletless customer already has a payment account: load it
+  // quietly on first render so they can see their balance and cash out
+  // without pressing anything. A 401 (never signed in) is simply ignored.
+  useEffect(() => {
+    if (!inv || wlTried.current) return;
+    wlTried.current = true;
+    fetch("/api/payer/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.nearAccount) {
+          setWalletless(d);
+          // After a refund the money is in this account: put cash out in front
+          // of the returning customer so they can get it out without hunting.
+          if (inv?.status === "refunded") setPayMode("none");
+        }
+      })
+      .catch(() => {});
+  }, [inv]);
 
   // Primary path: open the wallet popup, sign, send, then hand the signed tx
   // to the server so it can prove the vault was credited.
@@ -271,6 +297,35 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
     }
   }
 
+  // Cash out: move the payment account balance to a NEAR wallet the customer
+  // controls, on chain. Used after a refund and for any unspent change.
+  async function cashOut() {
+    if (!inv || !walletless) return;
+    setCoBusy(true);
+    setCoMsg("");
+    setCoTx("");
+    try {
+      const r = await fetch("/api/payer/cashout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          dest: coDest.trim(),
+          asset: inv.asset,
+          amount: coAmount.trim() === "" ? undefined : coAmount.trim(),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "could not send the cash out");
+      setCoTx(d.explorerUrl || "");
+      setCoMsg(d.detail || "cash out sent");
+      if (d.balance) setWalletless((old) => (old ? { ...old, balance: d.balance } : old));
+    } catch (e) {
+      setCoMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoBusy(false);
+    }
+  }
+
   const amt = inv ? Number(inv.amount) : 0;
   const amtStr = Number.isFinite(amt)
     ? amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -358,8 +413,9 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
         <div style={{ ...card, border: "1px solid var(--color-accent)", background: "var(--color-accent-soft, var(--color-bg-2))" }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>This invoice was refunded</div>
           <p style={{ fontSize: 12.5, color: "var(--color-muted)", margin: "8px 0 0" }}>
-            The employer returned the full amount to your account on chain. If this was your own
-            payment account, you can pay the invoice again right now.
+            The employer returned the full amount on chain. If you paid with your own wallet, it
+            went straight back to that wallet. If this was your payment account, the money is in
+            it: below you can pay the invoice again or cash the balance out to your own NEAR wallet.
           </p>
         </div>
       )}
@@ -527,6 +583,78 @@ function PayClientInner({ params }: { params: Promise<{ slug: string }> }) {
                       {wlMsg}
                     </div>
                   )}
+
+                  {/* cash out: move the balance to a wallet the customer controls */}
+                  {(() => {
+                    const hasAsset =
+                      inv.asset === "USDC"
+                        ? Number(walletless.balance.usdcBase) > 0
+                        : BigInt(walletless.balance.nearYocto) > 0n;
+                    return (
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--color-rule)" }}>
+                        {!coOpen ? (
+                          <button style={{ ...linkBtn, opacity: hasAsset ? 1 : 0.55 }} onClick={() => setCoOpen(true)}>
+                            {hasAsset ? `Cash out my ${inv.asset} balance to a wallet ↗` : "Cash out balance to a wallet"}
+                          </button>
+                        ) : (
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>
+                              Cash out to your own NEAR wallet
+                            </div>
+                            <p style={{ fontSize: 11.5, color: "var(--color-muted)", margin: "0 0 9px", lineHeight: 1.5 }}>
+                              Send the balance of this payment account to a NEAR wallet you control.
+                              After a refund, this is how you get your money back to your own wallet.
+                            </p>
+                            <input
+                              value={coDest}
+                              onChange={(e) => setCoDest(e.target.value)}
+                              placeholder="your NEAR wallet, e.g. alice.testnet or a 64 character address"
+                              style={input}
+                              spellCheck={false}
+                              autoCapitalize="none"
+                            />
+                            <input
+                              value={coAmount}
+                              onChange={(e) => setCoAmount(e.target.value)}
+                              placeholder={`amount in ${inv.asset} (leave empty to send the full balance)`}
+                              style={{ ...input, marginTop: 8 }}
+                              inputMode="decimal"
+                            />
+                            <button
+                              style={{ ...btn, marginTop: 10, opacity: coBusy || !coDest.trim() || !hasAsset ? 0.6 : 1 }}
+                              disabled={coBusy || !coDest.trim() || !hasAsset}
+                              onClick={cashOut}
+                            >
+                              {coBusy ? "Sending on chain…" : `Send ${inv.asset} to my wallet`}
+                            </button>
+                            {coMsg && (
+                              <div style={{ fontSize: 12, marginTop: 8, color: coMsg.includes("confirmed") || coMsg.includes("confirming") ? "var(--color-muted)" : "#d99" }}>
+                                {coMsg}
+                              </div>
+                            )}
+                            {coTx && (
+                              <a
+                                href={coTx}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "var(--color-accent)", fontWeight: 600 }}
+                              >
+                                View on the NEAR explorer ↗
+                              </a>
+                            )}
+                            {!hasAsset && (
+                              <div style={{ fontSize: 11.5, color: "var(--color-faint, var(--color-muted))", marginTop: 8 }}>
+                                Your {inv.asset} balance in this account is empty right now, so there is nothing to send out.
+                              </div>
+                            )}
+                            <button style={{ ...linkBtn, marginTop: 10 }} onClick={() => setCoOpen(false)}>
+                              close
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
