@@ -126,18 +126,49 @@ cargo test
 transitions, the minimum amount, duplicate slugs, and the full open, paid,
 refundable lifecycle. The same suite runs in CI on every push.
 
-To deploy it (one time, about 0.06 NEAR):
+The contract is live on NEAR testnet at:
+
+```
+0b435161055d82a427059c442a73cdfd8a87c854478895434d1a730189fc84c2
+```
+
+It was deployed with `scripts/deploy-invoice-contract.mjs deploy`, funded
+with free testnet NEAR, and a real cycle was run on chain with
+`scripts/run-live-cycle.mjs`:
+
+- `live-demo-001` was created for 25 USDC and then marked paid
+- `live-demo-002` was created for 10 USDC and then marked refunded
+
+Every state change was verified with a public view call, and the final state
+was re verified from two separate RPC nodes. The transaction links are in the
+terminal output and on the explorer.
+
+You do not need any key to audit the live state. Two view calls against any
+testnet RPC, using the base64 of `{"slug":"live-demo-001"}` as
+`args_base64`:
+
+```
+method_name = get     -> full invoice record (employer, client, amount, status, near_tx)
+method_name = status  -> just the status byte (2 = paid, 3 = refunded)
+```
+
+That keyless read is the whole point of the registry: anyone can confirm
+exactly what the app recorded, without trusting the app, its database, or its
+owner.
+
+To deploy your own instance (one time, about 0.06 NEAR):
 
 ```bash
 cargo build --release --target wasm32-unknown-unknown
-node scripts/deploy-invoice-contract.mjs            # deploys and initializes
+node scripts/deploy-invoice-contract.mjs deploy              # deploys and initializes
 node scripts/deploy-invoice-contract.mjs register <your.vault.account>
+node scripts/deploy-invoice-contract.mjs check <your.vault.account>
 ```
 
 One honest note: the running app settles money with plain NEP 141 transfers
 into the vault account and verifies the receipts, which is the flow that was
 tested live on testnet. The registry contract is the auditable record that
-sits on top of that, and it is ready to deploy.
+sits on top of that, and it is now deployed and holding live state.
 
 ## What is intentionally not in here
 
