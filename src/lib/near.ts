@@ -154,6 +154,11 @@ export function accountFromVault(accountId: string, masterKeyBase58: string): Ac
   return new Account(accountId, nearProvider(), masterKeyBase58 as never);
 }
 
+/** Account bound to one specific RPC endpoint (endpoint failover for writes). */
+export function accountForUrl(url: string, accountId: string, masterKeyBase58: string): Account {
+  return new Account(accountId, providerFor(url), masterKeyBase58 as never);
+}
+
 /** Explorer URL for a tx hash on the active network. */
 export function explorerUrl(networkId: string, txHash: string): string {
   const base =

@@ -100,22 +100,41 @@ async function deploy() {
   }
 
   const account = await accountFor(key);
+
+  // Detect an already-initialized contract before we touch it: view_account
+  // reports code_hash when the account already runs contract code. On a
+  // redeploy the contract is already initialized, so `new` would panic
+  // (reinit not allowed) and we must skip it. On a brand new account there is
+  // no code_hash, so we init right after deploy.
+  let hadCode = false;
+  try {
+    const before = await provider.query({ request_type: "view_account", account_id: contractId, finality: "optimistic" });
+    hadCode = Boolean(before?.code_hash && before.code_hash !== "11111111111111111111111111111111");
+  } catch {
+    hadCode = false;
+  }
+
   const deployed = await account.deployContract(wasm);
   console.log("deploy tx:", txLink(deployed), JSON.stringify(deployed.status));
 
-  // init only on first run: reinit is rejected by the contract itself
-  const init = await account.callFunctionRaw({
-    contractId,
-    methodName: "new",
-    args: { relayer: contractId, employers: [] },
-    deposit: 0n,
-    gas: 300_000_000_000_000_000n,
-  }).catch((e) => {
-    if (/reinit not allowed|already exists/i.test(String(e?.message || e))) return null;
-    throw e;
-  });
-  if (init) console.log("init tx:", txLink(init), JSON.stringify(init.status));
-  else console.log("init: already initialized, skipped");
+  if (hadCode) {
+    console.log("init: already initialized (code present), skipped");
+  } else {
+    const init = await account
+      .callFunctionRaw({
+        contractId,
+        methodName: "new",
+        args: { relayer: contractId, employers: [] },
+        deposit: 0n,
+        gas: 200_000_000_000_000n,
+      })
+      .catch((e) => {
+        if (/reinit not allowed|already exists|exceeds limit/i.test(String(e?.message || e))) return null;
+        throw e;
+      });
+    if (init) console.log("init tx:", txLink(init), JSON.stringify(init.status));
+    else console.log("init: already initialized, skipped");
+  }
 
   console.log(`\nDone. Contract live at ${EXPLORER}/accounts/${contractId}`);
   console.log("Next: register the employer account(s) that will bill clients:");

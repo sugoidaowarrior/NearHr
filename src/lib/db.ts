@@ -71,7 +71,7 @@ export function initDb(): void {
       amount_yocto    TEXT NOT NULL DEFAULT '0',      -- decimal string (yocto/base units)
       near_account    TEXT,                      -- employee NEAR account to pay
       status          TEXT NOT NULL DEFAULT 'pending', -- pending|executed|failed
-      tx_ref          TEXT,                      -- 1Click intent id / near tx hash
+      tx_ref          TEXT,                      -- near tx hash of the payroll payout (plain transfer)
       error           TEXT,
       executed_at     TEXT
     );
@@ -257,6 +257,21 @@ export function initDb(): void {
       db.exec("ALTER TABLE invoices ADD COLUMN refund_at TEXT");
     }
     db.prepare("PRAGMA user_version = 11").run();
+  }
+  if (ver < 12) {
+    // On chain registry receipt: whether the invoice contract holds this
+    // invoice (chain_status "recorded"), whether a best effort write failed
+    // and is waiting for a retry ("pending"), or null when the contract is
+    // not configured or the invoice's asset is not registered. chain_tx is
+    // the explorer hash of the write that recorded it.
+    const invCols = db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[];
+    if (!invCols.some((c) => c.name === "chain_status")) {
+      db.exec("ALTER TABLE invoices ADD COLUMN chain_status TEXT");
+    }
+    if (!invCols.some((c) => c.name === "chain_tx")) {
+      db.exec("ALTER TABLE invoices ADD COLUMN chain_tx TEXT");
+    }
+    db.prepare("PRAGMA user_version = 12").run();
   }
   // Drop legacy columns by rebuilding any table whose live schema still
   // carries them (idempotent: a clean database matches the whitelist exactly,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession, COOKIE } from "@/lib/sessions";
 import { createInvoice, listInvoices } from "@/lib/invoices";
+import { recordInvoiceOnChain } from "@/lib/contract";
 
 // GET  /api/invoices -> the employer's invoices (newest first)
 // POST /api/invoices -> create an invoice (asset: "USDC" | "NEAR"), returns it with its public link
@@ -35,6 +36,11 @@ export async function POST(req: NextRequest) {
         return cleaned.length ? cleaned : undefined;
       })(),
     });
+    // Record the invoice on the on chain registry. Best effort and never
+    // blocks the response: a failure (no contract configured, vault not
+    // ready, or the RPC chain flaking) leaves the invoice in the app, and
+    // the next transition retries the write (the contract is idempotent).
+    void recordInvoiceOnChain(inv, "create").catch(() => null);
     return NextResponse.json({ invoice: inv, payUrl: `/i/${inv.slug}` }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });

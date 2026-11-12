@@ -197,14 +197,18 @@ fn relayer_can_mark_refunded_from_open() {
 }
 
 #[test]
-#[should_panic(expected = "paid invoices cannot be refunded here")]
-fn paid_invoice_cannot_be_refunded() {
+fn paid_invoice_can_be_refunded() {
+    // The app refunds a paid invoice and then records the refund on chain, so
+    // the paid to refunded transition must be legal (and idempotent).
     let mut c = fresh();
     testing_env!(context(EMPLOYER_A));
     c.create_invoice("acme-202".to_string(), EMPLOYER_A.to_string(), "c.testnet".to_string(), 5 * USDC);
     testing_env!(context(RELAYER));
     c.mark_paid("acme-202".to_string(), "tx".to_string());
     c.mark_refunded("acme-202".to_string());
+    assert_eq!(c.status("acme-202".to_string()), 3);
+    c.mark_refunded("acme-202".to_string());
+    assert_eq!(c.status("acme-202".to_string()), 3);
 }
 
 #[test]
@@ -258,7 +262,7 @@ fn full_invoice_lifecycle() {
     testing_env!(context(EMPLOYER_A));
     c.create_invoice("acme-999".to_string(), EMPLOYER_A.to_string(), "client9.testnet".to_string(), 123 * USDC);
     assert_eq!(c.status("acme-999".to_string()), 0);
-    // 1Click delivers the USDC; the relayer records the tx.
+    // The payer delivers the USDC to the vault; the relayer records the tx.
     testing_env!(context(RELAYER));
     c.mark_paid("acme-999".to_string(), "deadbeef".to_string());
     assert_eq!(c.status("acme-999".to_string()), 2);

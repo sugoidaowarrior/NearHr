@@ -106,7 +106,7 @@ impl InvoiceContract {
     }
 
     /// The relayer (or the employer via their own meta transaction) marks an
-    /// invoice paid once 1Click has delivered the USDC to the employer's wallet.
+    /// invoice paid once the USDC has been delivered to the employer's vault.
     pub fn mark_paid(&mut self, slug: String, near_tx: String) {
         require!(self.is_authorized(), "only the relayer or an employer may mark paid");
         let inv = self.invoices.get(&slug).expect("no such invoice");
@@ -122,15 +122,16 @@ impl InvoiceContract {
         self.invoices.insert(&slug, &updated);
     }
 
-    /// The relayer (or the employer) marks an invoice refunded when the swap
-    /// failed and the client was paid back on their chain.
+    /// The relayer (or the employer) marks an invoice refunded once the money
+    /// has been returned to the client. Paid invoices can be refunded here:
+    /// the app refunds the payer and then records the refund.
     pub fn mark_refunded(&mut self, slug: String) {
         require!(self.is_authorized(), "only the relayer or an employer may mark refunded");
         let inv = self.invoices.get(&slug).expect("no such invoice");
         if inv.status == 3 {
             return; // idempotent
         }
-        require!(inv.status != 2, "paid invoices cannot be refunded here");
+        require!(inv.status != 4, "void invoices cannot be refunded");
         let updated = Invoice {
             status: 3,
             updated_at: env::block_timestamp(),

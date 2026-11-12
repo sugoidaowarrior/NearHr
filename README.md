@@ -139,6 +139,15 @@ with free testnet NEAR, and a real cycle was run on chain with
 - `live-demo-001` was created for 25 USDC and then marked paid
 - `live-demo-002` was created for 10 USDC and then marked refunded
 
+With the wiring in, the same cycle was then run end to end through the app
+itself (slug `rwkq2j`, 0.50 USDC): the app created the invoice and wrote the
+record on chain, a walletless payer paid from the account NearHr opened for
+them and the app verified the credit before flipping the invoice to paid
+(status 2 on chain, with the settlement tx hash), and the employer refunded
+it, with the money returned on chain and the record flipped to refunded
+(status 3). Every step was verified with a keyless view call and by the
+payer's USDC balance, and the final state is still readable today.
+
 Every state change was verified with a public view call, and the final state
 was re verified from two separate RPC nodes. The transaction links are in the
 terminal output and on the explorer.
@@ -165,10 +174,19 @@ node scripts/deploy-invoice-contract.mjs register <your.vault.account>
 node scripts/deploy-invoice-contract.mjs check <your.vault.account>
 ```
 
-One honest note: the running app settles money with plain NEP 141 transfers
-into the vault account and verifies the receipts, which is the flow that was
-tested live on testnet. The registry contract is the auditable record that
-sits on top of that, and it is now deployed and holding live state.
+## How the app writes to it
+
+The wiring lives in `src/lib/contract.ts`. When an invoice is created, paid,
+or refunded in the app, the same employer vault that holds the money also
+signs the matching contract call (`create_invoice`, `mark_paid`,
+`mark_refunded`). Money never moves through the contract, and the write is
+best effort: if it cannot reach the chain, the invoice stays exactly as it
+always did, flagged in the app, and the next transition retries it. The
+contract is idempotent, so a retry cannot double record.
+
+Set `NEAR_INVOICE_CONTRACT_ID` in `.env.local` to point the app at the
+contract. Leave it unset and the app runs exactly as before: the registry is
+an opt in layer, not a dependency.
 
 ## What is intentionally not in here
 

@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     "explorer_link",
     "refund_transaction",
     "refund_time",
+    "on_chain_record",
   ];
 
   const rows = invoices.map((inv) =>
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest) {
       inv.near_tx ? explorerUrl(net, inv.near_tx) : "",
       inv.refund_tx ?? "",
       inv.refund_at ?? "",
+      inv.chain_tx ?? "",
     ]
       .map(esc)
       .join(",")

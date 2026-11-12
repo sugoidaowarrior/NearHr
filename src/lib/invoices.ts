@@ -5,7 +5,7 @@
  * work is for). There are no line items. The employer picks the token at
  * creation time: USDC or NEAR. The client opens the pay link, signs in with a
  * NEAR wallet (Meteor or HERE on testnet) and pays in exactly that token,
- * straight to the employer's vault. No 1Click, no x402, no third party rail.
+ * straight to the employer's vault. No payment API, no x402, no third party rail.
  *
  * Verification is trustless. The client only posts its signed transaction and
  * its own account id. The server reads the real on chain outcome with the `tx`
@@ -21,6 +21,7 @@ import { getDb } from "./db";
 import { createHash, randomBytes } from "node:crypto";
 import { unlockVault } from "./vault";
 import { recordInvoicePayment } from "./invoice-payments";
+import { recordInvoiceOnChain } from "./contract";
 import {
   accountFromVault,
   defaultNearConfig,
@@ -94,6 +95,8 @@ export type Invoice = {
   near_tx: string | null;
   refund_tx: string | null;
   refund_at: string | null;
+  chain_status: string | null; // "recorded" | "pending" | null (registry receipt)
+  chain_tx: string | null; // explorer link of the on chain registry write
   settled_at: string | null;
   relayer_tx: string | null;
   created_at: string;
@@ -261,6 +264,8 @@ export function publicView(inv: Invoice, withPay = false) {
     status: inv.status,
     nearTx: inv.near_tx,
     refundTx: inv.refund_tx,
+    chainStatus: inv.chain_status,
+    chainTx: inv.chain_tx,
     settledAt: inv.settled_at,
     createdAt: inv.created_at,
     explorerUrl: inv.near_tx ? explorerUrl(defaultNearConfig().networkId, inv.near_tx) : null,
@@ -469,6 +474,10 @@ export async function verifyPayment(
     } catch {
       /* ledger write is best effort; the chain is the source of truth */
     }
+    // Record the payment on the on chain invoice registry (best effort, see
+    // contract.ts: a failure never changes money state and is retried by the
+    // next transition).
+    void recordInvoiceOnChain(fresh, "paid", txHash).catch(() => null);
   }
   return { invoice: fresh, confirmed: true, detail: "payment confirmed on chain", txHash };
 }
@@ -552,6 +561,9 @@ export async function refundInvoice(id: string, employerId: string): Promise<Ref
   } catch {
     /* ledger write is best effort; the chain is the source of truth */
   }
+  // Record the refund on the on chain invoice registry (best effort, see
+  // contract.ts).
+  void recordInvoiceOnChain(getInvoiceById(id, employerId)!, "refunded").catch(() => null);
   return {
     invoice: getInvoiceById(id, employerId)!,
     txHash,

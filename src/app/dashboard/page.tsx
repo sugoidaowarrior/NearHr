@@ -1819,6 +1819,20 @@ function InvoicesModal({
                     <button className="btn btn-ghost !px-2.5 !py-1 text-xs" onClick={() => refreshOne(inv.id)}>
                       Refresh
                     </button>
+                    {inv.chain_status === "recorded" && inv.chain_tx && (
+                      <a
+                        className="btn btn-ghost !px-2.5 !py-1 text-xs text-[var(--color-accent)]"
+                        href={inv.chain_tx}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={inv.chain_tx}
+                      >
+                        on chain ↗
+                      </a>
+                    )}
+                    {inv.chain_status === "pending" && (
+                      <span className="text-[11px] text-[var(--color-faint)]">on chain pending</span>
+                    )}
                     {(inv.status === "open" || inv.status === "pending") && (
                       <button className="btn btn-ghost !px-2.5 !py-1 text-xs" onClick={() => voidOne(inv.id)}>
                         Void
