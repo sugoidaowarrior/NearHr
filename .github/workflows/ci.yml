@@ -19,10 +19,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Type check
-        run: npx tsc -p tsconfig.json --noEmit
-
-      - name: Production build
+      - name: Production build (includes type check)
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
