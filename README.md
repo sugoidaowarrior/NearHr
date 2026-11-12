@@ -94,6 +94,51 @@ payroll run is a statement you can check.
 - **You to the client (refunds).** The exact billed amount back on chain,
   recorded with its own transaction.
 
+## The smart contract
+
+`contracts/invoice-contract` is a Rust NEAR contract that keeps an on chain
+registry of invoices. Each invoice stores the employer, the client, the
+amount in USDC base units, the status, and the NEAR transaction hash that
+settled it. State lives on chain, so an invoice record can be audited
+independently of the app: anyone can call `get(slug)` on the contract and
+see exactly what the app recorded.
+
+The access model is the whole point of the contract:
+- only the contract owner can register employers or rotate the relayer
+- only a registered employer (or the relayer acting on their behalf) can
+  create an invoice
+- only a registered employer or the relayer can mark an invoice paid or
+  refunded
+- `mark_paid` and `mark_refunded` are idempotent, so a relayer retry after a
+  timeout cannot corrupt state
+- an invoice below 0.1 USDC is rejected at the contract layer, not just in
+  the UI
+
+Testing it needs no network and no keys. The near-sdk ships an in memory
+blockchain, and every test gets a fresh one:
+
+```bash
+cd contracts/invoice-contract
+cargo test
+```
+
+21 tests cover every access control rule, the idempotency of both status
+transitions, the minimum amount, duplicate slugs, and the full open, paid,
+refundable lifecycle. The same suite runs in CI on every push.
+
+To deploy it (one time, about 0.06 NEAR):
+
+```bash
+cargo build --release --target wasm32-unknown-unknown
+node scripts/deploy-invoice-contract.mjs            # deploys and initializes
+node scripts/deploy-invoice-contract.mjs register <your.vault.account>
+```
+
+One honest note: the running app settles money with plain NEP 141 transfers
+into the vault account and verifies the receipts, which is the flow that was
+tested live on testnet. The registry contract is the auditable record that
+sits on top of that, and it is ready to deploy.
+
 ## What is intentionally not in here
 
 - **One click, without the 1Click API.** The pay button works like one click:

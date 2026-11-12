@@ -26,3 +26,22 @@ jobs:
 
       - name: Test suite (98 tests)
         run: npm test
+
+  contract:
+    name: Smart contract (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts/invoice-contract
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build wasm (the artifact that gets deployed)
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Contract tests (21 tests, in memory chain)
+        run: cargo test

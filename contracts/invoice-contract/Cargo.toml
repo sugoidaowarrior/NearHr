@@ -5,12 +5,15 @@ edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = { version = "5.30.1", features = ["legacy"] }
 borsh = "1"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+near-sdk = { version = "5.30.1", features = ["legacy", "unit-testing"] }
 
 [profile.release]
 codegen-units = 1
