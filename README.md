@@ -119,6 +119,29 @@ account that logs in with the email in `EMPLOYER_EMAILS` becomes the employer.
 To test without Google, run `npx tsx scripts/e2e-seed.mjs` and use the printed
 token as the `hp_session` cookie.
 
+## Tests
+
+```bash
+npm test
+```
+
+98 tests, no new dependencies. They run offline against a throwaway database
+so they never touch your real data. The runner is `node:test` plus `tsx`, the
+standard library, so there is nothing to install or configure.
+
+What they cover:
+- amount math at the exact bigint precision the chain uses
+- transaction hash normalization (base58, base64, hex)
+- payroll CSV parsing, including quoted fields, CRLF, and the 50 person cap
+- the payment ledger: booking, double spend prevention, statement grouping
+- invoice validation and money math
+- the vault crypto: tamper detection, legacy format, backups
+- sessions, OAuth state, and per employer access checks (IDOR)
+- SQL injection attempts against the real query layer
+
+Running the suite is how three real bugs were caught and fixed. Each one is
+documented in the commit that added the tests.
+
 ## Verified
 
 - Type check and production build pass clean.
