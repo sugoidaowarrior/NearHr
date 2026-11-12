@@ -237,11 +237,15 @@ function hexToB58(hex: string): string {
     s = A[Number(n % 58n)] + s;
     n /= 58n;
   }
-  for (const c of hex) {
-    if (c === "0") s = "1" + s;
+  // base58 marks each leading zero BYTE with a "1" (b58ToHex restores one
+  // zero byte per "1"). Counting per hex char broke round trips for any hash
+  // whose first byte is below 0x10.
+  let zeroBytes = 0;
+  for (let i = 0; i + 1 < hex.length; i += 2) {
+    if (hex[i] === "0" && hex[i + 1] === "0") zeroBytes++;
     else break;
   }
-  return s;
+  return "1".repeat(zeroBytes) + s;
 }
 
 export async function queryTx(txHash: string, senderId: string) {

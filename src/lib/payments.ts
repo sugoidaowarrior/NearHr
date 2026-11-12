@@ -10,7 +10,7 @@ import {
   usdcToBase,
   yoctoToNear,
 } from "./near";
-import { NEAR_ACCOUNT_RE } from "./employees";
+import { NEAR_ACCOUNT_RE, nearAccountLengthOk } from "./employees";
 
 /**
  * Payment ledger + one off sends. Every payout (payroll line item or a manual
@@ -49,7 +49,8 @@ export interface Payment {
 
 export function isNearAccount(w: string): boolean {
   const t = w.trim().toLowerCase();
-  return NEAR_ACCOUNT_RE.test(t) || /^[0-9a-f]{64}$/.test(t);
+  if (/^[0-9a-f]{64}$/.test(t)) return true; // implicit account
+  return NEAR_ACCOUNT_RE.test(t) && nearAccountLengthOk(t);
 }
 
 /** human amount -> integer base units for the asset. Throws on bad input. */

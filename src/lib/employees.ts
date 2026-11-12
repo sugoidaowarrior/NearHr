@@ -11,8 +11,18 @@ export type EmployeeFrequency = "monthly" | "biweekly" | "weekly";
 
 const FREQ: readonly string[] = ["monthly", "biweekly", "weekly"];
 
-/** NEAR account id: lower alpha numeric plus dot and dash, no leading dot. */
-export const NEAR_ACCOUNT_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/**
+ * NEAR account id grammar (nearcore): parts of lowercase alphanumerics
+ * separated by "_" or "-" joined with ".", no leading/trailing/double
+ * separators. Length (2..64) is enforced at the call sites.
+ */
+export const NEAR_ACCOUNT_RE =
+  /^(([a-z0-9]+[\-_])*[a-z0-9]+\.)*([a-z0-9]+[\-_])*[a-z0-9]+$/;
+
+/** Length rules for account ids: min 2, max 64. */
+export function nearAccountLengthOk(t: string): boolean {
+  return t.length >= 2 && t.length <= 64;
+}
 
 export interface EmployeeInput {
   name: string;
@@ -79,7 +89,7 @@ function validate(input: Partial<EmployeeInput>, { partial = false }: { partial?
   if (input.wallet !== undefined) {
     const w = String(input.wallet).trim().toLowerCase();
     if (partial && !w) out.push("wallet address is required");
-    if (w && !NEAR_ACCOUNT_RE.test(w) && !/^[0-9a-f]{64}$/.test(w))
+    if (w && !(NEAR_ACCOUNT_RE.test(w) && nearAccountLengthOk(w)) && !/^[0-9a-f]{64}$/.test(w))
       out.push(`invalid NEAR address: ${w}`);
   }
   if (input.email !== undefined && input.email) {

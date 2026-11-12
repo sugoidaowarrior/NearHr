@@ -114,7 +114,14 @@ export function decryptVault(record: string | VaultRecord, passphrase: string): 
   } catch {
     throw new Error("wrong passphrase or corrupted vault");
   }
-  const plain = gcmDecrypt(dek, Buffer.from(r.dataIv, "base64"), Buffer.from(r.data, "base64"));
+  let plain: Buffer;
+  try {
+    plain = gcmDecrypt(dek, Buffer.from(r.dataIv, "base64"), Buffer.from(r.data, "base64"));
+  } catch {
+    // A valid passphrase with a tampered payload must not leak a raw
+    // Node GCM error; it is the same "corrupted vault" failure class.
+    throw new Error("wrong passphrase or corrupted vault");
+  }
   return JSON.parse(plain.toString("utf8")) as VaultPlaintext;
 }
 
