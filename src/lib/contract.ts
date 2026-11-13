@@ -140,6 +140,91 @@ async function chainCall(
 }
 
 /**
+ * In-flight guard plus a per row throttle. A write already in progress is
+ * not started twice, and a row that just failed (for example a vault that
+ * is not registered on the contract) is not retried on every dashboard
+ * visit: five minutes between attempts is plenty for the RPC to come back.
+ */
+const inflight = new Set<string>();
+const lastAttempt = new Map<string, number>();
+const RETRY_COOLDOWN_MS = 5 * 60 * 1000;
+
+/**
+ * Map an app invoice state to the on chain write that would record it, or
+ * null for states with nothing to record (void, or an unknown value). The
+ * registry mirrors the lifecycle: open invoices are created, paid ones get
+ * mark_paid with the settlement tx, refunded ones mark_refunded.
+ */
+export function onChainActionForStatus(
+  status: string
+): "create" | "paid" | "refunded" | null {
+  if (status === "open") return "create";
+  if (status === "paid") return "paid";
+  if (status === "refunded") return "refunded";
+  return null;
+}
+
+/**
+ * Self heal: re attempt the on chain write for every invoice of this
+ * employer that is flagged pending (a best effort write that failed, for
+ * example because the RPC was down). Called when the employer loads the
+ * invoice list, so a registry that lagged the app catches up on the next
+ * dashboard visit. The action follows the app state: open invoices re run
+ * create_invoice, paid ones mark_paid with the settlement tx, refunded
+ * ones mark_refunded. Best effort throughout: never throws, never blocks
+ * the response, and a row that cannot be recorded yet is left pending for
+ * the next pass.
+ */
+export async function retryPendingOnChain(employerId: string): Promise<void> {
+  if (!invoiceContractId()) return;
+  let rows: {
+    id: string;
+    slug: string;
+    client_name: string;
+    amount: string;
+    asset: "USDC" | "NEAR";
+    status: string;
+    near_tx: string | null;
+  }[];
+  try {
+    rows = getDb()
+      .prepare(
+        `SELECT id, slug, client_name, amount, asset, status, near_tx
+         FROM invoices WHERE employer_id = ? AND chain_status = 'pending'`
+      )
+      .all(employerId) as typeof rows;
+  } catch {
+    return; // the flag read is best effort too
+  }
+  const now = Date.now();
+  for (const row of rows) {
+    const action = onChainActionForStatus(row.status);
+    if (!action) continue; // void or an unknown state: nothing to record
+    if (inflight.has(row.id)) continue;
+    const last = lastAttempt.get(row.id) ?? 0;
+    if (now - last < RETRY_COOLDOWN_MS) continue;
+    inflight.add(row.id);
+    lastAttempt.set(row.id, now);
+    void recordInvoiceOnChain(
+      {
+        id: row.id,
+        slug: row.slug,
+        employer_id: employerId,
+        client_name: row.client_name,
+        amount: row.amount,
+        asset: row.asset,
+      },
+      action,
+      row.near_tx ?? undefined
+    )
+      .catch(() => null)
+      .finally(() => {
+        inflight.delete(row.id);
+      });
+  }
+}
+
+/**
  * Record the invoice lifecycle transition on chain, best effort. Resolves
  * the employer's vault, signs the call, and stores the receipt on the
  * invoice row (chain_status, chain_tx). When the invoice was not on chain

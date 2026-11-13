@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession, COOKIE } from "@/lib/sessions";
 import { createInvoice, listInvoices } from "@/lib/invoices";
-import { recordInvoiceOnChain } from "@/lib/contract";
+import { recordInvoiceOnChain, retryPendingOnChain } from "@/lib/contract";
 
 // GET  /api/invoices -> the employer's invoices (newest first)
 // POST /api/invoices -> create an invoice (asset: "USDC" | "NEAR"), returns it with its public link
 export async function GET(req: NextRequest) {
   const userId = resolveSession(req.cookies.get(COOKIE)?.value);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Self heal: any invoice whose on chain write is still pending (a best
+  // effort write that could not reach the chain, for example because the RPC
+  // was down) gets another attempt in the background. Never blocks the
+  // response; the healed state shows on the next refresh.
+  void retryPendingOnChain(userId).catch(() => null);
   return NextResponse.json({ invoices: listInvoices(userId) });
 }
 

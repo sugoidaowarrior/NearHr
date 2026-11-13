@@ -188,6 +188,19 @@ Set `NEAR_INVOICE_CONTRACT_ID` in `.env.local` to point the app at the
 contract. Leave it unset and the app runs exactly as before: the registry is
 an opt in layer, not a dependency.
 
+**Self heal.** If a write fails (the RPC is down, the vault is not ready yet),
+the invoice is flagged `on chain pending` in the app, and the next time the
+employer loads the invoice list the app re attempts the write on chain
+(`retryPendingOnChain` in `src/lib/contract.ts`, wired into the invoice list
+route). The retry follows the app state: open invoices re run
+`create_invoice`, paid ones `mark_paid` with the settlement tx, refunded
+ones `mark_refunded`. It is throttled to one attempt per invoice per five
+minutes and runs in the background, so it never slows the page down.
+Verified live: an invoice left pending (slug `sh-heal-001`, 0.20 USDC)
+recovered on the next dashboard visit, with the receipt at
+https://explorer.testnet.near.org/transactions/2jByXmf6c4x4sPLLK69e5Kzd8kEC2eY1uTQdq1ADFG6Q
+and the state keyless confirmed on the registry.
+
 ## What is intentionally not in here
 
 - **One click, without the 1Click API.** The pay button works like one click:
