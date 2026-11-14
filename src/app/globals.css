@@ -216,16 +216,21 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* masked line reveal */
+/* masked line reveal. The padding on the clip box gives ascenders and
+   descenders room that the heading's 0.98 line height would otherwise
+   shave off (the tails of y, g and p used to get cut); the negative
+   margins keep the line's layout footprint exactly as before. */
 .mask-line {
   display: block;
   overflow: hidden;
+  padding: 0.1em 0 0.14em;
+  margin: -0.1em 0 -0.14em;
 }
 .mask-line i,
 .mask-line > span {
   font-style: normal;
   display: block;
-  transform: translateY(110%);
+  transform: translateY(130%);
   animation: maskUp 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .mask-d1 { animation-delay: 0.08s; }
