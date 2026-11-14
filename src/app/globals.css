@@ -205,6 +205,11 @@ body {
 }
 .display-grad {
   background: linear-gradient(100deg, #ffffff 10%, #8fa0ff 55%, #0082f3 100%);
+  /* The text is painted by this background (background-clip: text), so the
+     box must reach past the descender ink or the tails of g, p, y render
+     transparent. Extend it 18% below the box; the near-horizontal gradient
+     is visually unchanged. */
+  background-size: 100% 118%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
